@@ -70,7 +70,7 @@ async function scanFolder(core, folder, opts = {}) {
     .sort((a, b) => a.path.localeCompare(b.path, 'ru'));
 
   for (const f of all) {
-    if (f.name === HEADER_FILE || f.extension === ENTRY_EXT) continue;
+    if (f.name === HEADER_FILE || f.name === 'keyring.vault.backup.json' || f.extension === ENTRY_EXT) continue;
     const foreign = vaultFolders.find((v) => v !== target && (f.path.startsWith(`${v}/`)));
     if (foreign) {
       skipped.push({ file: f, reason: `внутри другого хранилища «${foreign}»` });

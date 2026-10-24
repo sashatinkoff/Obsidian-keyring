@@ -120,6 +120,23 @@ function buildGlobalSettings(container, core, refresh) {
   new Setting(container).setName('Интерфейс').setHeading();
   dropdown(
     new Setting(container)
+      .setName('Вид интерфейса')
+      .setDesc('«Авто» выбирает по ширине окна. «Компактный» — как на телефоне, удобен на планшете в портретной ориентации. Переключается и кнопкой в верхней панели.'),
+    [['auto', 'Авто'], ['full', 'Полный'], ['compact', 'Компактный']],
+    s.uiLayout || 'auto',
+    async (v) => {
+      s.uiLayout = v;
+      await save();
+      core.app.workspace.getLeavesOfType('keyring-view').forEach((l) => {
+        if (l.view && l.view.updateMode) {
+          l.view.updateMode(true);
+          l.view.render();
+        }
+      });
+    }
+  );
+  dropdown(
+    new Setting(container)
       .setName('Отступ сверху на телефоне')
       .setDesc('Если шапка Keyring уходит под статус-бар (режим edge-to-edge), увеличьте отступ. «Авто» определяет его по безопасной зоне экрана.'),
     [['auto', 'Авто'], [0, 'Нет'], [24, '24 px'], [32, '32 px'], [44, '44 px'], [56, '56 px'], [72, '72 px']],

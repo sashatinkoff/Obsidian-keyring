@@ -2,7 +2,7 @@
 /* Модель записи: нормализация, сериализация, поиск. */
 const { randomId } = require('../crypto/codec');
 
-const TRANSIENT = new Set(['category', 'path', 'rev']);
+const TRANSIENT = new Set(['category', 'path', 'rev', 'orphan']);
 
 function normalizeEntry(d, id) {
   const now = Date.now();

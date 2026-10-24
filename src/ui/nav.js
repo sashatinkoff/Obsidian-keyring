@@ -90,6 +90,12 @@ function renderMobileHeader(view, vault) {
       title: unlocked ? 'Заблокировать' : 'Заблокировано',
       on: { click: () => (unlocked ? view.manager.lock(vault) : null) },
     }, [icon(unlocked ? 'lock-open' : 'lock'), el('span', unlocked ? 'Открыто' : 'Закрыто')]) : null,
+    // на планшете в компактном виде — быстрый возврат к полному
+    view.root && view.root.clientWidth >= 560 ? el('button.kr-round-btn.kr-layout-btn', {
+      attr: { type: 'button', 'aria-label': 'Полный вид' },
+      title: 'Полный вид (как на компьютере)',
+      on: { click: () => view.toggleUiLayout() },
+    }, [icon('monitor')]) : null,
     el('button.kr-round-btn', {
       attr: { type: 'button', 'aria-label': 'Хранилища' },
       title: 'Хранилища',

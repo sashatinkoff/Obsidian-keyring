@@ -133,7 +133,8 @@ class Vault {
   async countEntries() {
     try {
       const { files } = await this.scan();
-      this.fileCount = files.filter((f) => !isConflictFile(f)).length;
+      // уникальные записи: <id>.kr и <id>.sync-conflict-….kr считаются одной
+      this.fileCount = new Set(files.map((f) => basename(f).split('.')[0])).size;
     } catch (e) {
       this.fileCount = null;
     }
@@ -167,12 +168,90 @@ class Vault {
         errors.push({ path, message: e.message });
       }
     }
-    for (const c of conflicts) c.original = entries.get(c.entry.id) || null;
+    // основной файл записи пропал, а конфликтные копии Syncthing остались —
+    // показываем самую свежую копию как запись (orphan), чтобы данные не «исчезали»
+    const orphans = new Map();
+    for (const c of conflicts) {
+      if (entries.has(c.entry.id)) continue;
+      const best = orphans.get(c.entry.id);
+      if (!best || (c.entry.updated || 0) > (best.entry.updated || 0)) orphans.set(c.entry.id, c);
+    }
+    for (const c of orphans.values()) {
+      entries.set(c.entry.id, Object.assign({}, c.entry, { orphan: true }));
+    }
+    const rest = conflicts.filter((c) => !Array.from(orphans.values()).includes(c));
+    for (const c of rest) c.original = entries.get(c.entry.id) || null;
     this.entries = entries;
-    this.conflicts = conflicts;
+    this.conflicts = rest;
     this.errors = errors;
     this.folders = folders.filter(Boolean).sort((a, b) => a.localeCompare(b, 'ru'));
     this.fileCount = entries.size;
+  }
+
+  /** Записи, оставшиеся только в конфликтных копиях. */
+  get orphans() {
+    return Array.from(this.entries.values()).filter((e) => e.orphan);
+  }
+
+  /** Сделать конфликтные копии без основного файла обычными записями (<id>.kr). */
+  async promoteOrphans() {
+    let n = 0;
+    for (const e of this.orphans) {
+      const clean = Object.assign({}, e);
+      delete clean.orphan;
+      await this.save(clean); // запишет <id>.kr и уберёт файл конфликтной копии
+      n++;
+    }
+    await this.reload();
+    return n;
+  }
+
+  /**
+   * Поиск удалённых записей этого хранилища: версии Syncthing (.stversions),
+   * корзина Obsidian (.trash). Берутся только файлы, которые расшифровываются
+   * ключом этого хранилища и которых нет среди текущих записей.
+   */
+  async findDeleted() {
+    if (!this.key) throw new Error('Хранилище заблокировано');
+    const roots = [
+      { dir: joinPath('.stversions', this.folder), source: 'Версии Syncthing', base: joinPath('.stversions', this.folder) },
+      { dir: joinPath(this.folder, '.stversions'), source: 'Версии Syncthing', base: joinPath(this.folder, '.stversions') },
+      { dir: '.trash', source: 'Корзина Obsidian', base: null },
+    ];
+    const found = new Map();
+    const walk = async (dir, depth, root) => {
+      if (depth > 12 || !(await this.adapter.exists(dir))) return;
+      const listing = await this.adapter.list(dir);
+      for (const f of listing.files) {
+        if (!/\.kr$/.test(f)) continue;
+        try {
+          const env = JSON.parse(await this.adapter.read(f));
+          if (!env || !env.id || this.entries.has(env.id)) continue;
+          const data = await decryptJson(this.key, env, entryAad(env.id));
+          const entry = normalizeEntry(data, env.id);
+          entry.category = root.base ? relativeTo(root.base, dirname(f)) : '';
+          const prev = found.get(env.id);
+          if (!prev || (entry.updated || 0) > (prev.entry.updated || 0)) found.set(env.id, { entry, path: f, source: root.source });
+        } catch (e) { /* чужой ключ или повреждён — пропускаем */ }
+      }
+      for (const sub of listing.folders) await walk(sub, depth + 1, root);
+    };
+    for (const r of roots) await walk(r.dir, 0, r);
+    return Array.from(found.values());
+  }
+
+  /** Вернуть найденные удалённые записи (исходные копии не трогаются). */
+  async restoreDeleted(items) {
+    let n = 0;
+    for (const it of items) {
+      const entry = Object.assign({}, it.entry, { updated: it.entry.updated || Date.now() });
+      delete entry.path;
+      delete entry.rev;
+      await this.save(entry);
+      n++;
+    }
+    await this.reload();
+    return n;
   }
 
   /** Категории (подпапки) с количеством записей. */

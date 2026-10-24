@@ -29,7 +29,7 @@ const {
 const { CreateRecoveryKeyModal, AddRecoveryNowModal } = require('./recovery');
 const { fileBlob, decryptToVault } = require('../vault/converter');
 
-const NARROW_MAX = 760;
+const NARROW_MAX = 820;
 const DOCK_MIN = 1180;
 
 class KeyringView extends ItemView {
@@ -181,7 +181,12 @@ class KeyringView extends ItemView {
       }
       if (bar !== null) break;
     }
-    if (bar !== null) return Math.max(0, Math.min(rect.bottom - bar, 120));
+    if (bar !== null) inset = Math.max(inset, rect.bottom - bar);
+
+    // плавающая панель Obsidian (новый мобильный интерфейс) и всё, что лежит поверх вида:
+    // идём снизу вверх и ищем строку, где в точках по ширине уже видны наши элементы
+    inset = Math.max(inset, this.measureOverlay(rect));
+    if (inset > 0) return Math.min(inset, 180);
 
     // панели Obsidian нет — учитываем только системную безопасную зону (полоса жестов)
     const probe = document.createElement('div');
@@ -194,12 +199,47 @@ class KeyringView extends ItemView {
     return Math.min(inset, 160);
   }
 
+  /** Высота чужих элементов, перекрывающих низ вида (по hit-test). */
+  measureOverlay(rect) {
+    const bottom = Math.min(rect.bottom, window.innerHeight) - 1;
+    const xs = [0.2, 0.35, 0.5, 0.65, 0.8].map((k) => rect.left + rect.width * k);
+    const covered = (x, y) => {
+      const hit = document.elementFromPoint(x, y);
+      return hit && !this.root.contains(hit) && !hit.contains(this.root);
+    };
+    if (document.querySelector('.modal-container')) return this.lastOverlay || 0; // окно поверх всего — не мерим
+    let worst = 0;
+    // самая верхняя перекрытая точка в нижней полосе (панель может «парить» над краем экрана)
+    for (const x of xs) {
+      for (let y = bottom - 176; y <= bottom; y += 4) {
+        if (covered(x, y)) {
+          worst = Math.max(worst, bottom - y);
+          break;
+        }
+      }
+    }
+    this.lastOverlay = worst ? worst + 6 : 0;
+    return this.lastOverlay;
+  }
+
+  /** Кнопка «вид»: полный ↔ компактный (запоминается). */
+  async toggleUiLayout() {
+    this.settings.uiLayout = this.mode === 'narrow' ? 'full' : 'compact';
+    await this.core.saveSettings();
+    this.updateMode(true);
+    this.render();
+    this.core.notice(this.settings.uiLayout === 'compact' ? 'Компактный вид (как на телефоне)' : 'Полный вид', 2500);
+  }
+
   updateMode(force) {
     this.updateInsets();
     const w = this.root.clientWidth;
     if (!w && !force) return;
     const width = w || 1200;
-    const mode = width < NARROW_MAX ? 'narrow' : 'wide';
+    const pref = this.settings.uiLayout || 'auto';
+    let mode = width < NARROW_MAX ? 'narrow' : 'wide';
+    if (pref === 'compact') mode = 'narrow';
+    else if (pref === 'full' && width >= 560) mode = 'wide'; // уже 560 px полный вид не помещается
     const docked = width >= DOCK_MIN;
     if (force || mode !== this.mode || docked !== this.docked) {
       this.mode = mode;

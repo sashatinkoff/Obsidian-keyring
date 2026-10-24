@@ -9,6 +9,7 @@ const { countLabel, recencyBucket, formatNumber } = require('../util/format');
 const { matchesQuery } = require('../vault/entry');
 const { auditVault } = require('../vault/audit');
 const { renderCard, renderRowHeader } = require('./card');
+const { renderOrphanBanner } = require('./restore-panel');
 
 const isMac = typeof navigator !== 'undefined' && /Mac|iPhone|iPad/.test(navigator.platform || '');
 
@@ -42,7 +43,8 @@ function renderTopbar(view, vault) {
       title: 'Заблокировать хранилище',
       on: { click: () => view.manager.lock(vault) },
     }, [el('span.kr-dot'), el('span', 'Хранилище открыто')]),
-    button('Новая запись', 'plus', () => view.openEditor(null), 'kr-btn-primary'),
+    iconButton('smartphone', 'Компактный вид (как на телефоне)', () => view.toggleUiLayout(), 'kr-layout-btn'),
+    button('Новая запись', 'plus', () => view.openEditor(null), 'kr-btn-primary kr-new-btn'),
   ]);
 }
 
@@ -52,6 +54,9 @@ function filterMenu(view, evt) {
     .setChecked(view.state.layout === 'cards').onClick(() => view.setLayout('cards')));
   menu.addItem((item) => item.setTitle('Список').setIcon('list')
     .setChecked(view.state.layout === 'list').onClick(() => view.setLayout('list')));
+  menu.addSeparator();
+  menu.addItem((item) => item.setTitle('Полный вид (как на компьютере)').setIcon('monitor')
+    .onClick(() => view.toggleUiLayout()));
   menu.addSeparator();
   for (const [id, g] of Object.entries(GROUPS)) {
     menu.addItem((item) => item.setTitle(g.label).setIcon(g.icon)
@@ -298,6 +303,8 @@ function fillList(view, vault, host) {
 function renderVaultPage(view, vault) {
   const page = el('div.kr-page.kr-vault-page');
   page.append(view.mode === 'wide' ? renderTopbar(view, vault) : renderMobileSearch(view, vault));
+  const banner = renderOrphanBanner(view, vault);
+  if (banner) page.append(banner);
   const host = el('div.kr-list-host');
   page.append(host);
   view.listHost = host;

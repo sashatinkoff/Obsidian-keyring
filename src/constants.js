@@ -5,7 +5,7 @@ const HEADER_FILE = 'keyring.vault.json';
 const ENTRY_EXT = 'kr';
 const FORMAT = 'obsidian-keyring';
 const FORMAT_VERSION = 1;
-const APP_VERSION = '1.0.0';
+const APP_VERSION = '1.1.1';
 
 // Границы числа итераций PBKDF2 в заголовке: защита от подменённого
 // заголовка с абсурдными значениями (слишком слабо или «повесить» устройство).
@@ -37,6 +37,7 @@ const DEFAULT_SETTINGS = {
   iterations: DEFAULT_ITERATIONS,
   group: 'alpha',
   layout: 'cards',
+  uiLayout: 'auto', // auto | full | compact — вид интерфейса
   mobileTopInset: 'auto',
   mobileBottomInset: 'auto',
   lockoutAttempts: 3,

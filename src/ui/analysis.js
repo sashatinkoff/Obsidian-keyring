@@ -1,6 +1,7 @@
 'use strict';
 /* Вкладка «Анализ»: здоровье хранилища, проблемные записи, конфликты синхронизации. */
 const { el, icon, button } = require('../util/dom');
+const { renderDeletedPanel } = require('./restore-panel');
 const { formatDate, countLabel, basename } = require('../util/format');
 const { auditVault } = require('../vault/audit');
 const { avatar, strengthBadge } = require('./card');
@@ -22,7 +23,7 @@ function issueList(view, vault, entries, reason) {
 
 function section(title, iconName, count, tone, content) {
   return el(`section.kr-panel.kr-audit-sec${count ? `.is-${tone}` : ''}`, [
-    el('div.kr-panel-head', [icon(iconName), el('span', title), el('div.kr-spacer'), el(`span.kr-count-chip${count ? `.is-${tone}` : ''}`, String(count))]),
+    el('div.kr-panel-head', [icon(iconName), el('span', title), el('div.kr-spacer'), count === null ? null : el(`span.kr-count-chip${count ? `.is-${tone}` : ''}`, String(count))]),
     content,
   ]);
 }
@@ -130,6 +131,7 @@ function renderAnalysisPage(view, vault) {
   grid.append(section('Логины без 2FA', 'timer-off', a.noTotp.length, 'info',
     issueList(view, vault, a.noTotp, () => 'включите двухфакторную защиту, если сервис поддерживает')));
   grid.append(section('Конфликты синхронизации', 'git-merge', a.conflicts.length, 'warn', conflictList(view, vault)));
+  grid.append(section('Удалённые записи', 'history', null, 'info', renderDeletedPanel(view, vault)));
   if (a.errors.length) {
     grid.append(section('Не удалось прочитать', 'file-warning', a.errors.length, 'bad',
       el('div.kr-issues', a.errors.map((er) => el('div.kr-issue', [icon('file-x'), el('div.kr-issue-main', [el('b.is-mono', basename(er.path)), el('small', er.message)])])))));

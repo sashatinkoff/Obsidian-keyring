@@ -4419,6 +4419,11 @@ button.kr-section-head:hover {
 
 .kr-mode-narrow .kr-page {
   max-width: 100%;
+  /* clip, а не hidden: hidden делает страницу контейнером прокрутки и ломает «липкий» поиск */
+  overflow-x: clip;
+}
+
+.kr-mode-narrow .kr-settings {
   overflow-x: hidden;
 }
 
@@ -4698,4 +4703,135 @@ button.kr-section-head:hover {
   gap: 8px;
   margin-top: 14px;
   opacity: 0.85;
+}
+
+/* ---------- шапка и указатель на узком экране ---------- */
+.kr-mode-narrow .kr-brand,
+.kr-mode-narrow .kr-brand-text {
+  min-width: 0;
+  flex: 1 1 auto;
+}
+
+.kr-mode-narrow .kr-brand-sub {
+  display: block;
+}
+
+.kr-mode-narrow .kr-brand-name small {
+  display: none;
+}
+
+.kr-mode-narrow .kr-brand-name > span,
+.kr-mode-narrow .kr-brand-sub {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+/* алфавитный указатель не должен закрывать счётчики групп */
+.kr-mode-narrow:has(.kr-alpha) .kr-list-host {
+  padding-right: 30px;
+}
+
+.kr-mode-narrow .kr-mhead {
+  background: rgb(11, 13, 19);
+}
+
+.kr-mode-narrow .kr-brand-sub .kr-dot {
+  display: inline-block;
+  margin-right: 6px;
+  vertical-align: 1px;
+}
+
+/* ---------- полный вид в узкой области (планшет, боковые панели Obsidian) ---------- */
+.kr-mode-wide .kr-main {
+  container-type: inline-size;
+  container-name: krmain;
+}
+
+.kr-topbar .kr-search {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.kr-topbar > * {
+  flex-shrink: 0;
+}
+
+.kr-topbar > .kr-search {
+  flex-shrink: 1;
+}
+
+.kr-stat-body {
+  flex-wrap: wrap;
+  min-width: 0;
+}
+
+.kr-stat-value {
+  min-width: 0;
+}
+
+@container krmain (max-width: 900px) {
+  .kr-topbar {
+    gap: 8px;
+  }
+  .kr-topbar .kr-kbd,
+  .kr-topbar .kr-security-btn span:last-child,
+  .kr-topbar .kr-status-pill span:last-child {
+    display: none;
+  }
+  .kr-topbar .kr-status-pill {
+    padding: 0 12px;
+  }
+  .kr-stats {
+    grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+  }
+  .kr-stat-head span {
+    white-space: normal;
+  }
+}
+
+@container krmain (max-width: 680px) {
+  .kr-topbar .kr-new-btn span:last-child {
+    display: none;
+  }
+  .kr-topbar .kr-new-btn {
+    padding: 0 12px;
+  }
+  .kr-stat-body {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+}
+
+/* ---------- восстановление записей ---------- */
+.kr-orphan-banner {
+  align-items: center;
+  margin-bottom: 14px;
+}
+
+.kr-orphan-banner .kr-btn {
+  flex-shrink: 0;
+}
+
+.kr-mode-narrow .kr-orphan-banner {
+  flex-wrap: wrap;
+  margin: 0 0 12px;
+}
+
+.kr-restore {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 10px;
+}
+
+.kr-restore .kr-issues {
+  align-self: stretch;
+}
+
+.kr-ok-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--kr-mint);
 }
