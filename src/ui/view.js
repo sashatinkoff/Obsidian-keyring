@@ -7,6 +7,7 @@
 const {
   ItemView, Menu, Keymap, MarkdownRenderer, Platform,
 } = require('obsidian');
+const { ExportModal, ImportModal } = require('./exchange-modal');
 const { VIEW_TYPE } = require('../constants');
 const { el, icon, clear } = require('../util/dom');
 const { formatCountdown, hrefOf } = require('../util/format');
@@ -566,6 +567,11 @@ class KeyringView extends ItemView {
       }
     }
     menu.addItem((item) => item.setTitle('Настройки восстановления').setIcon('life-buoy').onClick(() => this.setTab('settings')));
+    menu.addSeparator();
+    menu.addItem((item) => item.setTitle('Экспорт (JSON, CSV, заметки)…').setIcon('download')
+      .onClick(() => new ExportModal(this, vault).open()));
+    menu.addItem((item) => item.setTitle('Импорт (JSON, CSV, .md)…').setIcon('upload')
+      .onClick(() => new ImportModal(this, vault).open()));
     menu.addSeparator();
     menu.addItem((item) => item.setTitle('Заблокировать').setIcon('lock').onClick(() => this.manager.lock(vault)));
     menu.showAtMouseEvent(evt);

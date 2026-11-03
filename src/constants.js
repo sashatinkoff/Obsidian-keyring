@@ -5,7 +5,7 @@ const HEADER_FILE = 'keyring.vault.json';
 const ENTRY_EXT = 'kr';
 const FORMAT = 'obsidian-keyring';
 const FORMAT_VERSION = 1;
-const APP_VERSION = '1.1.1';
+const APP_VERSION = '1.2.0';
 
 // Границы числа итераций PBKDF2 в заголовке: защита от подменённого
 // заголовка с абсурдными значениями (слишком слабо или «повесить» устройство).

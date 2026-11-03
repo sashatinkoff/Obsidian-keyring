@@ -4835,3 +4835,36 @@ button.kr-section-head:hover {
   gap: 8px;
   color: var(--kr-mint);
 }
+
+/* ---------- экспорт / импорт ---------- */
+.kr-warn.is-danger {
+  background: rgba(255, 122, 144, 0.08);
+  border-color: rgba(255, 122, 144, 0.3);
+}
+
+.kr-warn.is-danger > .kr-icon,
+.kr-warn.is-danger b {
+  color: var(--kr-red);
+}
+
+.kr-import-sum {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.kr-import-preview {
+  max-height: 260px;
+  overflow: auto;
+}
+
+.kr-import-folder {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.kr-import-folder .kr-input {
+  flex: 1 1 auto;
+  min-width: 0;
+}

@@ -231,5 +231,5 @@ function fileBlob(entry) {
 }
 
 module.exports = {
-  scanFolder, convertItems, decryptToVault, fileBlob, formatSize, mimeOf,
+  scanFolder, convertItems, decryptToVault, fileBlob, formatSize, mimeOf, freePath,
 };

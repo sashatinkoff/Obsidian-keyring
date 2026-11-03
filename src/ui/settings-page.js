@@ -5,6 +5,7 @@ const { formatDate, formatNumber, countLabel } = require('../util/format');
 const { CIPHER_LABEL, KDF_LABEL } = require('../constants');
 const { buildGlobalSettings } = require('./settings-tab');
 const { RemoveVaultModal } = require('./remove-vault');
+const { ExportModal, ImportModal } = require('./exchange-modal');
 const { renderRecoveryPanel, renderHeaderPanel, CreateRecoveryKeyModal } = require('./recovery');
 const {
   PromptModal, ChangePasswordModal, ConfirmModal,
@@ -30,6 +31,8 @@ function vaultCard(view, vault) {
       button(view.core.settings.recovery ? 'Сменить ключ восстановления' : 'Ключ восстановления', 'life-buoy',
         () => new CreateRecoveryKeyModal(view, { vault }).open(), 'kr-btn-soft'),
       button('Зашифровать папку…', 'folder-lock', () => view.convertFolder(vault.folder, vault), 'kr-btn-soft'),
+      button('Экспорт…', 'download', () => new ExportModal(view, vault).open(), 'kr-btn-soft'),
+      button('Импорт…', 'upload', () => new ImportModal(view, vault).open(), 'kr-btn-soft'),
       button('Заблокировать', 'lock', () => view.manager.lock(vault), 'kr-btn-soft')
     );
   } else {

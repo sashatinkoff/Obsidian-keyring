@@ -188,6 +188,25 @@ class Vault {
     this.fileCount = entries.size;
   }
 
+  /** Проверить мастер-пароль (для опасных действий, например экспорта без шифрования). */
+  async verifyPassword(password) {
+    await unlockVaultKey(this.header, password);
+    return true;
+  }
+
+  /** Применить план импорта: новые записи и обновления. */
+  async applyImport(plan, onProgress) {
+    const all = [...plan.add, ...plan.update];
+    let i = 0;
+    for (const e of all) {
+      await this.save(e);
+      i++;
+      if (onProgress) onProgress(i, all.length);
+    }
+    await this.reload();
+    return { added: plan.add.length, updated: plan.update.length, skipped: plan.skip.length };
+  }
+
   /** Записи, оставшиеся только в конфликтных копиях. */
   get orphans() {
     return Array.from(this.entries.values()).filter((e) => e.orphan);
