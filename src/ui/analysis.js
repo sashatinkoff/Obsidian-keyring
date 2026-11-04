@@ -1,6 +1,7 @@
 'use strict';
 /* Вкладка «Анализ»: здоровье хранилища, проблемные записи, конфликты синхронизации. */
 const { el, icon, button } = require('../util/dom');
+const { strengthOf } = require('../crypto/pin');
 const { renderDeletedPanel } = require('./restore-panel');
 const { formatDate, countLabel, basename } = require('../util/format');
 const { auditVault } = require('../vault/audit');
@@ -116,7 +117,9 @@ function renderAnalysisPage(view, vault) {
 
   const grid = el('div.kr-audit-grid');
   grid.append(section('Слабые пароли', 'shield-alert', a.weak.length, 'bad',
-    issueList(view, vault, a.weak, (e) => `${e.password.length} симв. · рекомендуем 16+`)));
+    issueList(view, vault, a.weak, (e) => (e.type === 'pin'
+      ? `PIN ${strengthOf(e).weak || 'предсказуемый'} — замените на случайный`
+      : `${e.password.length} симв. · рекомендуем 16+`))));
   const reusedEntries = a.reused.flat();
   grid.append(section('Повторяющиеся пароли', 'copy', reusedEntries.length, 'bad',
     issueList(view, vault, reusedEntries, (e) => {

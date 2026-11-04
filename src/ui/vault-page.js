@@ -66,20 +66,42 @@ function filterMenu(view, evt) {
   menu.showAtMouseEvent(evt);
 }
 
+/** Телефон: закреплённый поиск + прокручиваемые вместе со списком папки и теги. */
 function renderMobileSearch(view, vault) {
+  const frag = document.createDocumentFragment();
+  frag.append(renderMobileSearchBar(view, vault));
+  const filters = el('div.kr-mfilters', [renderFolderChips(view, vault), renderTagBar(view, vault)]);
+  frag.append(filters);
+  return frag;
+}
+
+function renderFolderChips(view, vault) {
   const chips = el('div.kr-chips');
   const all = view.state.category === null;
   chips.append(el(`button.kr-chip-tab${all ? '.is-active' : ''}`, {
     attr: { type: 'button' },
     on: { click: () => view.setCategory(null) },
   }, [icon('layout-grid'), `Все (${vault.entries.size})`]));
-  for (const c of vault.categories()) {
-    if (!c.count && !c.path) continue;
+  // без горизонтальной прокрутки: чипы переносятся, лишние — под «ещё N»
+  const cats = vault.categories().filter((c) => c.count || c.path);
+  const FOLDERS_SHOWN = 5;
+  const shown = view.state.foldersAll ? cats : cats.filter((c, i) => i < FOLDERS_SHOWN || view.state.category === c.path);
+  for (const c of shown) {
     chips.append(el(`button.kr-chip-tab${view.state.category === c.path ? '.is-active' : ''}`, {
       attr: { type: 'button' },
       on: { click: () => view.setCategory(c.path) },
-    }, [icon(c.path ? 'folder' : 'inbox'), `${c.name} (${c.count})`]));
+    }, [icon(c.path ? 'folder' : 'inbox'), el('span.kr-chip-tab-text', `${c.name} (${c.count})`)]));
   }
+  if (cats.length > shown.length || (view.state.foldersAll && cats.length > FOLDERS_SHOWN)) {
+    chips.append(el('button.kr-link.kr-chips-more', {
+      attr: { type: 'button' },
+      on: { click: () => { view.state.foldersAll = !view.state.foldersAll; view.render(); } },
+    }, view.state.foldersAll ? 'свернуть' : `ещё ${cats.length - shown.length}`));
+  }
+  return chips;
+}
+
+function renderMobileSearchBar(view) {
   return el('div.kr-msearch', [
     el('label.kr-search', [
       icon('search'),
@@ -94,7 +116,6 @@ function renderMobileSearch(view, vault) {
         },
       }, [icon('sliders-horizontal')]),
     ]),
-    chips,
   ]);
 }
 
@@ -158,12 +179,68 @@ function renderStrip(view, vault) {
   ]);
 }
 
-function filtered(view, vault) {
-  const { category, query } = view.state;
+/** Есть ли у записи тег (с учётом вложенных: «работа» находит «работа/devops»). */
+function hasTag(e, tag) {
+  return (e.tags || []).some((t) => {
+    const x = String(t).toLowerCase();
+    return x === tag || x.startsWith(`${tag}/`);
+  });
+}
+
+function filtered(view, vault, opts = {}) {
+  const { category, query, tags } = view.state;
   return Array.from(vault.entries.values()).filter((e) => {
     if (category !== null && e.category !== category && !(category && e.category.startsWith(`${category}/`))) return false;
+    if (!opts.ignoreTags && tags.size && !Array.from(tags).every((t) => hasTag(e, t))) return false;
     return matchesQuery(e, query);
   });
+}
+
+const TAGS_SHOWN = 12;
+
+/** Панель тегов: частые теги текущей выборки, выбранные — подсвечены. */
+function renderTagBar(view, vault) {
+  const base = filtered(view, vault, { ignoreTags: true });
+  const sel = view.state.tags;
+  const counts = new Map();
+  const names = new Map();
+  // теги, которые ещё сужают выборку: считаем по записям, прошедшим уже выбранные теги
+  const narrowed = base.filter((e) => Array.from(sel).every((t) => hasTag(e, t)));
+  for (const e of narrowed) {
+    for (const t of new Set((e.tags || []).map((x) => String(x)))) {
+      const k = t.toLowerCase();
+      counts.set(k, (counts.get(k) || 0) + 1);
+      if (!names.has(k)) names.set(k, t);
+    }
+  }
+  for (const t of sel) if (!counts.has(t)) counts.set(t, 0);
+  if (!counts.size) return null;
+  const list = Array.from(counts.entries())
+    .sort((a, b) => Number(sel.has(b[0])) - Number(sel.has(a[0])) || b[1] - a[1] || a[0].localeCompare(b[0], 'ru'));
+  const wide = view.mode === 'wide';
+  const limit = view.state.tagsAll ? Infinity : (wide ? TAGS_SHOWN : 6);
+  const shown = list.filter(([k], i) => i < limit || sel.has(k));
+  const bar = el(`div.kr-tagbar${wide ? '' : '.is-narrow'}`, [
+    icon('hash', 'kr-tagbar-icon'),
+    ...shown.map(([k, n]) => el(`button.kr-tagchip${sel.has(k) ? '.is-active' : ''}`, {
+      attr: { type: 'button', 'aria-pressed': sel.has(k) ? 'true' : 'false' },
+      title: sel.has(k) ? 'Убрать фильтр' : `Показать записи с #${names.get(k) || k}`,
+      on: { click: () => view.toggleTag(k) },
+    }, [el('span', `#${names.get(k) || k}`), el('small', String(n)), sel.has(k) ? icon('x') : null])),
+    list.length > shown.length ? el('button.kr-link.kr-tagbar-more', {
+      attr: { type: 'button' },
+      on: { click: () => { view.state.tagsAll = true; view.render(); } },
+    }, `ещё ${list.length - shown.length}`) : null,
+    view.state.tagsAll && list.length > (wide ? TAGS_SHOWN : 6) ? el('button.kr-link.kr-tagbar-more', {
+      attr: { type: 'button' },
+      on: { click: () => { view.state.tagsAll = false; view.render(); } },
+    }, 'свернуть') : null,
+    sel.size ? el('button.kr-link.kr-tagbar-reset', {
+      attr: { type: 'button' },
+      on: { click: () => view.toggleTag(null) },
+    }, [icon('x'), 'Сбросить']) : null,
+  ]);
+  return bar;
 }
 
 function buildSections(view, entries) {
@@ -201,8 +278,13 @@ function buildSections(view, entries) {
 }
 
 function renderEmpty(view, vault) {
-  if (view.state.query) {
-    return el('div.kr-empty', [icon('search-x'), el('h3', 'Ничего не найдено'), el('p', `По запросу «${view.state.query}» записей нет.`)]);
+  if (view.state.query || view.state.tags.size) {
+    const by = [
+      view.state.query ? `по запросу «${view.state.query}»` : null,
+      view.state.tags.size ? `с тегами ${Array.from(view.state.tags).map((t) => `#${t}`).join(' + ')}` : null,
+    ].filter(Boolean).join(' и ');
+    return el('div.kr-empty', [icon('search-x'), el('h3', 'Ничего не найдено'), el('p', `Записей ${by} нет.`),
+      view.state.tags.size ? button('Сбросить теги', 'x', () => view.toggleTag(null), 'kr-btn-soft') : null]);
   }
   return el('div.kr-empty', [
     icon('key-round'),
@@ -218,7 +300,11 @@ function sectionKey(view, s) {
 
 function fillList(view, vault, host) {
   clear(host);
-  if (view.mode === 'wide') host.append(renderStats(view, vault), renderStrip(view, vault));
+  if (view.mode === 'wide') {
+    host.append(renderStats(view, vault), renderStrip(view, vault));
+    const tb = renderTagBar(view, vault);
+    if (tb) host.append(tb);
+  }
 
   const entries = filtered(view, vault);
   if (view.state.category !== null) {
@@ -287,7 +373,8 @@ function fillList(view, vault, host) {
   host.append(body);
 
   view.root.querySelectorAll('.kr-alpha').forEach((n) => n.remove());
-  if (view.mode === 'narrow' && view.state.group === 'alpha' && sections.length > 1) {
+  // алфавитный указатель справа отключён: на телефоне он закрывал список
+  if (false && view.mode === 'narrow' && view.state.group === 'alpha' && sections.length > 1) {
     view.root.append(el('div.kr-alpha', sections.map((s) => el('button.kr-alpha-btn', {
       attr: { type: 'button' },
       on: {

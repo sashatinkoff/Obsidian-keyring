@@ -1,11 +1,11 @@
 'use strict';
 /* Карточка записи: полная (десктоп), компактная (мобильный) и строка таблицы. */
-const { ENTRY_TYPES, CIPHER_LABEL } = require('../constants');
+const { ENTRY_TYPES, SECRET_TYPES, CIPHER_LABEL } = require('../constants');
 const { el, icon, iconButton, button } = require('../util/dom');
 const {
   hostOf, hueOf, initialOf, formatDate, formatRelative, countLabel,
 } = require('../util/format');
-const { analyzePassword } = require('../crypto/strength');
+const { strengthOf } = require('../crypto/pin');
 const { parseTotp } = require('../crypto/totp');
 const { formatSize } = require('../vault/converter');
 const { renderSuggestPanel, hasSuggestions } = require('./suggest-panel');
@@ -39,26 +39,43 @@ function avatar(view, entry, size) {
   return box;
 }
 
-function chips(entry, limit) {
+/** Тег на карточке: нажатие включает фильтр по нему. */
+function tagChip(view, t) {
+  if (!view) return el('span.kr-tag', `#${t}`);
+  const active = view.state.tags.has(String(t).toLowerCase());
+  return el(`button.kr-tag.is-clickable${active ? '.is-active' : ''}`, {
+    attr: { type: 'button' },
+    title: active ? 'Убрать фильтр по тегу' : `Показать все записи с #${t}`,
+    on: {
+      click: (e) => {
+        e.stopPropagation();
+        view.toggleTag(t);
+      },
+    },
+  }, `#${t}`);
+}
+
+function chips(entry, limit, view) {
   const out = [];
   if (limit) {
     const hasTotp = entry.totp && parseTotp(entry.totp);
-    if (entry.tags.length) out.push(el('span.kr-tag', `#${entry.tags[0]}`));
+    if (entry.tags.length) out.push(tagChip(view, entry.tags[0]));
     else if (hasTotp) out.push(el('span.kr-tag.is-mint', [icon('lock'), '2FA']));
     return out;
   }
   const tags = limit ? entry.tags.slice(0, limit) : entry.tags;
-  for (const t of tags) out.push(el('span.kr-tag', `#${t}`));
+  for (const t of tags) out.push(tagChip(view, t));
   const hasTotp = entry.totp && parseTotp(entry.totp);
   if (hasTotp && (!limit || out.length < limit + 1)) out.push(el('span.kr-tag.is-mint', [icon('lock'), '2FA']));
   if (entry.type === 'secret' && !limit) out.push(el('span.kr-tag.is-blue', [icon('key-square'), 'Секрет']));
+  if (entry.type === 'pin' && !limit) out.push(el('span.kr-tag.is-blue', [icon('rectangle-ellipsis'), 'PIN']));
   if (entry.type === 'note' && !limit) out.push(el('span.kr-tag.is-blue', [icon('sticky-note'), 'Заметка']));
   if (entry.type === 'file' && !limit) out.push(el('span.kr-tag.is-blue', [icon('paperclip'), 'Вложение']));
   return out;
 }
 
 function hasSecret(entry) {
-  return entry.type === 'login' || entry.type === 'secret';
+  return SECRET_TYPES.includes(entry.type);
 }
 
 function fileRow(view, vault, entry, compact) {
@@ -81,7 +98,7 @@ function fileRow(view, vault, entry, compact) {
 
 function strengthBadge(entry, compact) {
   if (!hasSecret(entry) || !entry.password) return null;
-  const s = analyzePassword(entry.password);
+  const s = strengthOf(entry);
   if (compact) {
     return el(`span.kr-score.is-l${s.level}`, { title: `${s.label} · ~${s.bits} бит` }, [icon('shield-check'), `${s.score}%`]);
   }
@@ -192,7 +209,7 @@ function auditBlock(view, entry) {
     ['Создана', formatDate(entry.created)],
     ['Изменена', formatDate(entry.updated)],
   ];
-  if (hasSecret(entry)) rows.push(['Пароль сменён', formatDate(entry.passwordChanged)]);
+  if (hasSecret(entry)) rows.push([entry.type === 'pin' ? 'PIN сменён' : 'Пароль сменён', formatDate(entry.passwordChanged)]);
   if (entry.origin) rows.push(['Исходник', entry.origin]);
   rows.push(['Ревизия', entry.rev ? `0x${entry.rev.slice(0, 4)}…${entry.rev.slice(-4)}` : '—', entry.rev ? `0x${entry.rev}` : '']);
   const versions = entry.history.length;
@@ -264,11 +281,11 @@ function renderFullCard(view, vault, entry) {
   card.append(el('div.kr-card-head', [
     avatar(view, entry),
     el('div.kr-card-main', [
-      el('div.kr-card-titlerow', [el('h3.kr-card-title', entry.title), copyBtn(view, entry.title, 'название'), ...chips(entry), suggestChip(view, entry)]),
+      el('div.kr-card-titlerow', [el('h3.kr-card-title', entry.title), copyBtn(view, entry.title, 'название'), ...chips(entry, 0, view), suggestChip(view, entry)]),
       meta.length ? el('div.kr-card-meta', meta) : null,
     ]),
     el('div.kr-card-actions', [
-      entry.username ? iconButton('user', 'Скопировать логин', () => view.copy(entry.username, 'логин')) : null,
+      entry.username ? iconButton('user', `Скопировать: ${(type.userLabel || 'логин').toLowerCase()}`, () => view.copy(entry.username, (type.userLabel || 'логин').toLowerCase())) : null,
       entry.password && hasSecret(entry) ? iconButton('copy', `Скопировать: ${type.secretLabel.toLowerCase()}`, () => view.copy(entry.password, type.secretLabel.toLowerCase())) : null,
       iconButton('pencil', 'Изменить', () => view.openEditor(entry)),
     ]),
@@ -320,20 +337,21 @@ function renderCompactCard(view, vault, entry) {
   if (entry.type === 'file') {
     card.append(fileRow(view, vault, entry, true));
   } else if (hasSecret(entry)) {
+    const isPin = entry.type === 'pin';
     card.append(el('div.kr-card-btns', [
-      el('button.kr-cbtn.is-icon', {
+      isPin ? null : el('button.kr-cbtn.is-icon', {
         attr: { type: 'button', 'aria-label': 'Скопировать ссылку', disabled: !entry.url },
         on: { click: () => view.copy(entry.url, 'ссылка') },
       }, [icon('link')]),
       el('button.kr-cbtn', {
         attr: { type: 'button', disabled: !entry.username },
-        on: { click: () => view.copy(entry.username, 'логин') },
-      }, [icon('user'), el('span', 'Логин')]),
+        on: { click: () => view.copy(entry.username, (type.userLabel || 'логин').toLowerCase()) },
+      }, [icon(entry.type === 'pin' ? 'credit-card' : 'user'), el('span', entry.type === 'pin' ? 'Карта' : 'Логин')]),
       el('button.kr-cbtn.is-primary', {
         attr: { type: 'button', disabled: !entry.password },
         on: { click: () => view.copy(entry.password, type.secretLabel.toLowerCase()) },
       }, [icon(type.icon), el('span', type.secretLabel)]),
-      el('button.kr-cbtn.is-icon.is-mint', {
+      isPin ? null : el('button.kr-cbtn.is-icon.is-mint', {
         attr: { type: 'button', 'aria-label': 'Открыть сайт', disabled: !entry.url },
         on: { click: () => view.openUrl(entry.url) },
       }, [icon('external-link')]),
@@ -355,7 +373,7 @@ function renderCompactCard(view, vault, entry) {
     }
     const rows = [
       copyRow(view, 'id-card', 'Название', entry.title),
-      copyRow(view, 'circle-user', entry.type === 'secret' ? 'Ключ ID' : 'Логин', entry.username),
+      copyRow(view, entry.type === 'pin' ? 'credit-card' : 'circle-user', type.userLabel || 'Логин', entry.username),
       copyRow(view, 'globe', 'Ссылка', entry.url, hostOf(entry.url)),
       entry.tags.length ? copyRow(view, 'hash', 'Теги', entry.tags.map((t) => `#${t}`).join(' ')) : null,
     ].filter(Boolean);
@@ -407,7 +425,7 @@ function renderRow(view, vault, entry) {
     el('div.kr-row-actions', [
       entry.url ? iconButton('link', 'Скопировать ссылку', () => view.copy(entry.url, 'ссылка')) : null,
       entry.username ? iconButton('user', 'Скопировать логин', () => view.copy(entry.username, 'логин')) : null,
-      entry.password && hasSecret(entry) ? iconButton('copy', 'Скопировать пароль', () => view.copy(entry.password, type.secretLabel.toLowerCase())) : null,
+      entry.password && hasSecret(entry) ? iconButton('copy', `Скопировать: ${type.secretLabel.toLowerCase()}`, () => view.copy(entry.password, type.secretLabel.toLowerCase())) : null,
       iconButton('pencil', 'Изменить', () => view.openEditor(entry)),
     ]),
   ]);

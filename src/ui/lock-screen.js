@@ -1,7 +1,7 @@
 'use strict';
 /* Экран блокировки и первый запуск. */
 const { Platform } = require('obsidian');
-const { CIPHER_LABEL, KDF_LABEL } = require('../constants');
+const { CIPHER_LABEL, KDF_LABEL, APP_VERSION } = require('../constants');
 const { el, icon, button } = require('../util/dom');
 const { countLabel, formatNumber, formatCountdown } = require('../util/format');
 const { passwordErrorText } = require('./modals');
@@ -114,6 +114,7 @@ function renderLockScreen(view, vault) {
         on: { click: () => new RemoveVaultModal(view, vault).open() },
       }, [icon('folder-x'), 'Убрать это хранилище…']),
     ]),
+    el('div.kr-version', `Keyring v${APP_VERSION}`),
   ]));
 
   // На телефоне не открываем клавиатуру сами: иначе форма прыгает при загрузке.
@@ -156,6 +157,7 @@ function renderOnboarding(view) {
         attr: { type: 'button' },
         on: { click: () => view.manager.discover() },
       }, [icon('search'), 'Найти существующие хранилища']),
+      el('div.kr-version', `Keyring v${APP_VERSION}`),
     ]),
   ]);
 }

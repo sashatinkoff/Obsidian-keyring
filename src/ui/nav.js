@@ -71,6 +71,7 @@ function renderSidebar(view) {
     el('span', unlocked ? 'Сессия активна' : 'Всё заблокировано'),
     unlocked ? el('span.kr-session-time', '') : null,
   ]));
+  side.append(el('div.kr-version', `Keyring v${APP_VERSION}`));
   return side;
 }
 

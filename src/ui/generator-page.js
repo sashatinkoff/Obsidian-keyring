@@ -5,6 +5,7 @@ const { generatePassword, generatorEntropy } = require('../crypto/generator');
 const { analyzePassword } = require('../crypto/strength');
 const { strengthMeter, generatorOptions, colorPassword } = require('./widgets');
 const { maskTail } = require('../util/format');
+const { generatePin, analyzePin } = require('../crypto/pin');
 
 const sessionHistory = [];
 
@@ -107,12 +108,51 @@ function renderGeneratorPage(view) {
     checkResult,
   ]);
 
+  // PIN-код
+  const pinGen = view.pinGenState || (view.pinGenState = Object.assign({ length: 4, avoidWeak: true }, view.settings.pinGenerator));
+  let pin = view.pinCurrent || generatePin(pinGen.length, pinGen);
+  view.pinCurrent = pin;
+  const pinOut = el('div.kr-gen-big.kr-pin-big');
+  const pinMeter = el('div');
+  const showPin = () => {
+    pinOut.textContent = pin;
+    clear(pinMeter).append(strengthMeter(analyzePin(pin)));
+  };
+  const newPin = () => {
+    pin = generatePin(pinGen.length, pinGen);
+    view.pinCurrent = pin;
+    showPin();
+  };
+  const copyPin = () => {
+    view.copy(pin, 'PIN');
+    if (sessionHistory[0] !== pin) sessionHistory.unshift(pin);
+    renderHistory();
+  };
+  const lens = el('div.kr-seg.kr-pin-lengths', [4, 5, 6, 8].map((n) => el(`button.kr-seg-btn${pinGen.length === n ? '.is-active' : ''}`, {
+    attr: { type: 'button' },
+    on: {
+      click: () => {
+        pinGen.length = n;
+        lens.querySelectorAll('.kr-seg-btn').forEach((b) => b.classList.toggle('is-active', b.textContent === String(n)));
+        newPin();
+      },
+    },
+  }, String(n))));
+  showPin();
+  const pinPanel = el('div.kr-panel.kr-pin-panel', [
+    el('div.kr-panel-head', [icon('rectangle-ellipsis'), el('span', 'PIN-код')]),
+    el('p.kr-muted', 'Случайные цифры без 1234, 0000, повторов, годов и дат.'),
+    el('div.kr-gen-output', [pinOut, iconButton('refresh-cw', 'Новый PIN', newPin), iconButton('copy', 'Скопировать', copyPin)]),
+    pinMeter,
+    el('div.kr-pin-row', [el('span', 'Цифр:'), lens, el('div.kr-spacer'), button('Скопировать', 'copy', copyPin, 'kr-btn-soft kr-btn-sm')]),
+  ]);
+
   const history = el('div.kr-panel', [
     el('div.kr-panel-head', [icon('history'), el('span', 'Скопированные в этой сессии')]),
     historyHost,
   ]);
 
-  page.append(el('div.kr-gen-layout', [main, el('div.kr-gen-col', [check, history])]));
+  page.append(el('div.kr-gen-layout', [main, el('div.kr-gen-col', [pinPanel, check, history])]));
   return page;
 }
 

@@ -9,7 +9,7 @@ function normalizeEntry(d, id) {
   const fields = Array.isArray(d.fields) ? d.fields : [];
   return {
     id: id || d.id || randomId(),
-    type: ['login', 'secret', 'note', 'file'].includes(d.type) ? d.type : 'login',
+    type: ['login', 'secret', 'pin', 'note', 'file'].includes(d.type) ? d.type : 'login',
     title: String(d.title || 'Без названия'),
     url: String(d.url || ''),
     username: String(d.username || ''),

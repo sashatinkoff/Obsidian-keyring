@@ -5,7 +5,7 @@ const HEADER_FILE = 'keyring.vault.json';
 const ENTRY_EXT = 'kr';
 const FORMAT = 'obsidian-keyring';
 const FORMAT_VERSION = 1;
-const APP_VERSION = '1.2.0';
+const APP_VERSION = '1.3.0';
 
 // Границы числа итераций PBKDF2 в заголовке: защита от подменённого
 // заголовка с абсурдными значениями (слишком слабо или «повесить» устройство).
@@ -46,11 +46,16 @@ const DEFAULT_SETTINGS = {
   hiddenVaults: [], // папки-хранилища, убранные из Keyring (файлы на месте)
   recovery: null, // { id, publicJwk, created } — только открытый ключ
   generator: Object.assign({}, DEFAULT_GENERATOR),
+  pinGenerator: { length: 4, avoidWeak: true },
 };
 
+// типы записей с секретом в поле password (пароль, ключ, PIN)
+const SECRET_TYPES = ['login', 'secret', 'pin'];
+
 const ENTRY_TYPES = {
-  login: { label: 'Логин', secretLabel: 'Пароль', icon: 'key-round' },
-  secret: { label: 'Секрет / API', secretLabel: 'Секрет', icon: 'key-square' },
+  login: { label: 'Логин', secretLabel: 'Пароль', icon: 'key-round', userLabel: 'Логин' },
+  secret: { label: 'Секрет / API', secretLabel: 'Секрет', icon: 'key-square', userLabel: 'Ключ ID' },
+  pin: { label: 'PIN-код', secretLabel: 'PIN', icon: 'rectangle-ellipsis', userLabel: 'Карта / устройство' },
   note: { label: 'Заметка', secretLabel: null, icon: 'sticky-note' },
   file: { label: 'Файл', secretLabel: null, icon: 'paperclip' },
 };
@@ -86,6 +91,7 @@ module.exports = {
   DEFAULT_GENERATOR,
   DEFAULT_SETTINGS,
   ENTRY_TYPES,
+  SECRET_TYPES,
   MAX_FILE_MB,
   GROUPS,
   TABS,

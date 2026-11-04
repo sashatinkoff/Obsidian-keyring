@@ -16,7 +16,7 @@ const { parseNote } = require('./importer');
 
 const EXPORT_FORMAT = 'keyring-export';
 const TYPE_LABELS = {
-  login: 'Логин', secret: 'Секрет', note: 'Заметка', file: 'Файл',
+  login: 'Логин', secret: 'Секрет', pin: 'PIN-код', note: 'Заметка', file: 'Файл',
 };
 
 function pad(n) {
@@ -163,6 +163,7 @@ function guessType(raw, has) {
   if (/^(login|логин|1)$/.test(t)) return 'login';
   if (/^(note|securenote|secure note|заметка|2)$/.test(t)) return 'note';
   if (/^(secret|секрет)$/.test(t)) return 'secret';
+  if (/^(pin|пин|pin-код|пин-код)$/.test(t)) return 'pin';
   return has.username || has.password ? 'login' : 'note';
 }
 
@@ -294,7 +295,10 @@ const NOTES_CLOSE = '<!-- /keyring:notes -->';
 const ENTRY_MARK = '<!-- keyring:entry -->';
 const META_RE = /<!-- keyring:meta (\{.*?\}) -->/;
 const KNOWN_ROWS = {
-  Логин: 'username', Пароль: 'password', Сайт: 'url', '2FA': 'totp',
+  Логин: 'username', Пароль: 'password', Сайт: 'url', '2FA': 'totp', PIN: 'password', 'Карта / устройство': 'username', 'Ключ ID': 'username', Секрет: 'password',
+};
+const ROW_LABELS = {
+  login: ['Логин', 'Пароль'], secret: ['Ключ ID', 'Секрет'], pin: ['Карта / устройство', 'PIN'],
 };
 
 function safeName(s) {
@@ -334,8 +338,9 @@ function bodyMarkdown(e, attachmentName) {
   const out = [];
   out.push(`> [!info] ${TYPE_LABELS[e.type] || 'Запись'}${e.category ? ` · ${e.category}` : ''}`, '');
   const rows = [];
-  if (e.username) rows.push(['Логин', code(e.username)]);
-  if (e.password) rows.push(['Пароль', code(e.password)]);
+  const [userLabel, secretLabel] = ROW_LABELS[e.type] || ROW_LABELS.login;
+  if (e.username) rows.push([userLabel, code(e.username)]);
+  if (e.password) rows.push([secretLabel, code(e.password)]);
   if (e.url) rows.push(['Сайт', `<${e.url}>`]);
   if (e.totp) rows.push(['2FA', code(e.totp)]);
   for (const f of e.fields || []) rows.push([`${f.label || 'Поле'}${f.hidden ? ' 🔒' : ''}`, f.value ? code(f.value) : '—']);

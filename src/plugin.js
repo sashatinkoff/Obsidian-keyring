@@ -8,6 +8,7 @@ const { SecureClipboard } = require('./util/clipboard');
 const { KeyringView } = require('./ui/view');
 const { KeyringSettingTab } = require('./ui/settings-tab');
 const { generatePassword } = require('./crypto/generator');
+const { generatePin } = require('./crypto/pin');
 const { formatCountdown } = require('./util/format');
 const { icon, clear } = require('./util/dom');
 
@@ -109,6 +110,14 @@ class KeyringCore {
       id: 'copy-generated',
       name: 'Сгенерировать пароль и скопировать',
       callback: () => this.clipboard.copy(generatePassword(this.settings.generator), 'новый пароль'),
+    });
+    p.addCommand({
+      id: 'copy-generated-pin',
+      name: 'Сгенерировать PIN-код и скопировать',
+      callback: () => {
+        const g = Object.assign({ length: 4, avoidWeak: true }, this.settings.pinGenerator);
+        this.clipboard.copy(generatePin(g.length, g), 'новый PIN');
+      },
     });
   }
 

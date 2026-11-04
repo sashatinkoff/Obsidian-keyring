@@ -1,13 +1,14 @@
 'use strict';
 /* Аудит хранилища: слабые, повторяющиеся, старые пароли, 2FA, конфликты. */
-const { analyzePassword } = require('../crypto/strength');
+const { strengthOf } = require('../crypto/pin');
+const { SECRET_TYPES } = require('../constants');
 const { parseTotp } = require('../crypto/totp');
 
 const YEAR = 365 * 86400000;
 
 function auditVault(vault) {
   const entries = Array.from(vault.entries.values());
-  const withPassword = entries.filter((e) => (e.type === 'login' || e.type === 'secret') && e.password);
+  const withPassword = entries.filter((e) => SECRET_TYPES.includes(e.type) && e.password);
   const weak = [];
   const old = [];
   const noTotp = [];
@@ -19,9 +20,10 @@ function auditVault(vault) {
     if (e.totp && parseTotp(e.totp)) totpCount++;
   }
   for (const e of withPassword) {
-    const s = analyzePassword(e.password);
-    bitsSum += Math.min(s.bits, 256);
-    if (s.score < 60) weak.push(e);
+    const s = strengthOf(e);
+    // PIN короткий по природе: слабым считается только предсказуемый
+    if (e.type !== 'pin') bitsSum += Math.min(s.bits, 256);
+    if (e.type === 'pin' ? !!s.weak : s.score < 60) weak.push(e);
     if (Date.now() - (e.passwordChanged || e.created) > YEAR) old.push(e);
     if (e.type === 'login' && !e.totp) noTotp.push(e);
     const list = byPassword.get(e.password) || [];
@@ -45,7 +47,8 @@ function auditVault(vault) {
     reused,
     reusedCount,
     vulnerable: vulnerable.size,
-    avgBits: withPassword.length ? Math.round((bitsSum / withPassword.length) * 10) / 10 : 0,
+    avgBits: withPassword.filter((e) => e.type !== 'pin').length
+      ? Math.round((bitsSum / withPassword.filter((e) => e.type !== 'pin').length) * 10) / 10 : 0,
     totpCount,
     health,
     conflicts: vault.conflicts,

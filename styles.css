@@ -4717,7 +4717,8 @@ button.kr-section-head:hover {
 }
 
 .kr-mode-narrow .kr-brand-name small {
-  display: none;
+  flex: none;
+  font-size: 10.5px;
 }
 
 .kr-mode-narrow .kr-brand-name > span,
@@ -4866,5 +4867,315 @@ button.kr-section-head:hover {
 
 .kr-import-folder .kr-input {
   flex: 1 1 auto;
+  min-width: 0;
+}
+
+/* ---------- PIN-код ---------- */
+.kr-pin-input {
+  letter-spacing: 0.35em;
+  font-variant-numeric: tabular-nums;
+}
+
+.kr-pin-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  color: var(--kr-text-2);
+}
+
+.kr-pin-lengths {
+  display: inline-flex;
+}
+
+.kr-pin-lengths .kr-seg-btn {
+  min-width: 44px;
+  justify-content: center;
+}
+
+.kr-pin-hint:empty {
+  display: none;
+}
+
+.kr-pin-hint.is-bad {
+  color: var(--kr-red);
+  font-size: 12.5px;
+}
+
+.kr-editor .kr-seg-full {
+  flex-wrap: wrap;
+}
+
+.kr-editor .kr-seg-full .kr-seg-btn {
+  flex: 1 1 auto;
+}
+
+.kr-pin-big {
+  flex: 1 1 auto;
+  letter-spacing: 0.3em;
+  font-variant-numeric: tabular-nums;
+}
+
+.kr-pin-panel .kr-pin-row {
+  margin-top: 10px;
+}
+
+/* ---------- фильтр по тегам ---------- */
+.kr-tagbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  margin: 0 0 16px;
+}
+
+.kr-tagbar.is-narrow {
+  margin: 10px 0 0;
+  max-width: 100%;
+}
+
+.kr-tagbar.is-narrow .kr-tagchip {
+  max-width: 100%;
+}
+
+.kr-tagbar.is-narrow .kr-tagchip span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.kr-tagbar-icon {
+  color: var(--kr-text-3, var(--kr-text-2));
+  flex: none;
+}
+
+.kr-tagchip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  flex: none;
+  height: 28px;
+  padding: 0 10px;
+  border-radius: 999px;
+  border: 1px solid rgba(197, 164, 255, 0.22);
+  background: transparent;
+  color: var(--kr-violet-soft);
+  font-size: 12.5px;
+  cursor: pointer;
+  box-shadow: none;
+}
+
+.kr-tagchip small {
+  color: var(--kr-text-2);
+  font-family: var(--kr-mono);
+  font-size: 11px;
+}
+
+.kr-tagchip:hover {
+  background: var(--kr-violet-bg);
+}
+
+.kr-tagchip.is-active {
+  background: var(--kr-violet-bg);
+  border-color: rgba(197, 164, 255, 0.6);
+  color: #fff;
+}
+
+.kr-tagchip .kr-icon svg {
+  width: 12px;
+  height: 12px;
+}
+
+.kr-tagbar-more,
+.kr-tagbar-reset {
+  flex: none;
+  font-size: 12.5px;
+}
+
+.kr-tag.is-clickable {
+  cursor: pointer;
+  box-shadow: none;
+  font-family: inherit;
+}
+
+.kr-tag.is-clickable:hover,
+.kr-tag.is-active {
+  border-color: rgba(197, 164, 255, 0.7);
+  color: #fff;
+}
+
+/* ---------- телефон: никакой горизонтальной прокрутки ---------- */
+.kr-mode-narrow .kr-chips {
+  flex-wrap: wrap;
+  overflow-x: visible;
+  gap: 6px;
+}
+
+.kr-mode-narrow .kr-chip-tab {
+  height: 32px;
+  padding: 0 12px;
+  font-size: 13px;
+  max-width: 100%;
+  flex: 0 1 auto;
+  min-width: 0;
+}
+
+.kr-chip-tab-text {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.kr-chips-more {
+  flex: none;
+  font-size: 13px;
+}
+
+.kr-mode-narrow .kr-preview-text,
+.kr-mode-narrow .kr-suggest-diff,
+.kr-mode-narrow .kr-import-preview,
+.is-mobile .kr-modal .kr-preview-text,
+.is-mobile .kr-modal .kr-suggest-diff,
+.is-mobile .kr-modal .kr-import-preview {
+  overflow-x: hidden;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.kr-mode-narrow .kr-suggest-diff > div,
+.is-mobile .kr-suggest-diff > div {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+/* заметки записей: блоки кода и таблицы переносятся, а не прокручиваются */
+.kr-mode-narrow .kr-notes pre,
+.kr-mode-narrow .kr-notes code,
+.is-mobile .kr-modal pre,
+.is-mobile .kr-modal code {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  overflow-x: hidden;
+}
+
+.kr-mode-narrow .kr-notes table,
+.is-mobile .kr-modal table {
+  display: table;
+  width: 100%;
+  table-layout: fixed;
+  overflow-wrap: anywhere;
+}
+
+.kr-mode-narrow .kr-notes img,
+.is-mobile .kr-modal img {
+  max-width: 100%;
+  height: auto;
+}
+
+.kr-recovery-text {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  overflow-x: hidden;
+}
+
+.kr-mode-narrow .kr-card-compact .kr-card-titlerow {
+  min-width: 0;
+}
+
+.kr-card-compact .kr-card-details {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.kr-card-details > *,
+.kr-card-compact,
+.kr-card-compact .kr-panel,
+.kr-mode-narrow .kr-notes,
+.kr-mode-narrow .kr-notes > * {
+  min-width: 0;
+  max-width: 100%;
+}
+
+.kr-mode-narrow .kr-notes,
+.is-mobile .kr-modal .kr-notes {
+  overflow-wrap: anywhere;
+}
+
+/* длинные теги не растягивают карточку и окна */
+.kr-tag,
+.kr-tagchip {
+  max-width: 100%;
+  min-width: 0;
+}
+
+.kr-tag {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.kr-mode-narrow .kr-card-titlerow,
+.is-mobile .kr-modal .kr-entry-head,
+.is-mobile .kr-modal .kr-chips-row {
+  flex-wrap: wrap;
+  min-width: 0;
+}
+
+.kr-mode-narrow .kr-editor-foot {
+  flex-wrap: wrap;
+  padding: 12px 14px;
+}
+
+.kr-mode-narrow .kr-editor-foot .kr-btn {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.kr-mode-narrow .kr-editor-foot .kr-btn span:last-child {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.kr-pin-row {
+  flex-wrap: wrap;
+}
+
+.is-mobile .modal.kr-modal {
+  overflow-x: hidden;
+}
+
+/* папки и теги прокручиваются вместе со списком — закреплён только поиск */
+.kr-mfilters {
+  margin: -4px 0 12px;
+}
+
+.kr-mfilters .kr-chips {
+  margin-top: 0;
+}
+
+.kr-mfilters:empty {
+  display: none;
+}
+
+/* ---------- версия плагина ---------- */
+.kr-version {
+  font-family: var(--kr-mono);
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  color: var(--kr-text-3, var(--kr-text-2));
+  opacity: 0.75;
+  text-align: center;
+  user-select: text;
+}
+
+.kr-side .kr-version {
+  padding: 0 16px 12px;
+  text-align: left;
+}
+
+.kr-lock-card .kr-version {
+  margin-top: 4px;
+}
+
+.kr-mode-narrow .kr-brand-name,
+.kr-mode-narrow .kr-brand-name > span {
   min-width: 0;
 }

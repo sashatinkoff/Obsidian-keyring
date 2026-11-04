@@ -70,6 +70,8 @@ const ALIASES = {
   braces: ['code', 'file-json'],
   table: ['sheet', 'grid'],
   files: ['copy', 'file-text'],
+  'rectangle-ellipsis': ['form-input', 'hash'],
+  'credit-card': ['wallet', 'id-card'],
   'file-check': ['file-check-2', 'file'],
   'folder-down': ['folder-input', 'folder'],
   'sticky-note': ['file-text'],

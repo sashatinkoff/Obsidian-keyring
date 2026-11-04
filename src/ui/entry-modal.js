@@ -123,7 +123,7 @@ class EntryModal extends BaseModal {
         el('div.kr-card-titlerow', [
           el('span.kr-chip', [icon(type.icon), type.label]),
           e.category ? el('span.kr-chip', [icon('folder'), e.category]) : null,
-          ...chips(e),
+          ...chips(e, 0, { state: view.state, toggleTag: (t) => { this.close(); view.toggleTag(t); } }),
         ]),
       ]),
       button('Изменить', 'pencil', () => {
@@ -135,7 +135,7 @@ class EntryModal extends BaseModal {
     // доступ
     const access = [];
     if (hasSecret(e)) {
-      access.push(this.row('circle-user', e.type === 'secret' ? 'Ключ ID' : 'Логин', e.username));
+      access.push(this.row(e.type === 'pin' ? 'credit-card' : 'circle-user', type.userLabel || 'Логин', e.username));
       access.push(this.row(type.icon, type.secretLabel, e.password, { secret: true, key: 'password', extra: strengthBadge(e, true) }));
       access.push(this.row('globe', 'Ссылка', e.url, { display: e.url, open: () => view.openUrl(e.url), mono: false }));
       if (e.totp) {
@@ -175,7 +175,7 @@ class EntryModal extends BaseModal {
         ['Шифрование', CIPHER_LABEL],
         ['Создана', formatDate(e.created)],
         ['Изменена', formatDate(e.updated)],
-        hasSecret(e) ? ['Пароль сменён', formatDate(e.passwordChanged)] : null,
+        hasSecret(e) ? [e.type === 'pin' ? 'PIN сменён' : 'Пароль сменён', formatDate(e.passwordChanged)] : null,
         e.origin ? ['Исходник', e.origin] : null,
         e.rev ? ['Ревизия', `0x${e.rev.slice(0, 4)}…${e.rev.slice(-4)}`, `0x${e.rev}`] : null,
       ].filter(Boolean).flatMap(([k, v, raw]) => [

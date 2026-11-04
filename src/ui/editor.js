@@ -1,6 +1,7 @@
 'use strict';
 /* Панель создания/редактирования записи со встроенным генератором. */
-const { ENTRY_TYPES, CIPHER_LABEL, MAX_FILE_MB } = require('../constants');
+const { ENTRY_TYPES, SECRET_TYPES, CIPHER_LABEL, MAX_FILE_MB } = require('../constants');
+const { generatePin, analyzePin } = require('../crypto/pin');
 const { toBase64 } = require('../crypto/codec');
 const { formatSize, mimeOf } = require('../vault/converter');
 const { el, icon, iconButton, button, clear } = require('../util/dom');
@@ -9,7 +10,7 @@ const { analyzePassword } = require('../crypto/strength');
 const { parseTotp, totpCode, formatCode } = require('../crypto/totp');
 const { newEntry, cloneEntry } = require('../vault/entry');
 const { PromptModal } = require('./modals');
-const { strengthMeter, generatorOptions } = require('./widgets');
+const { strengthMeter, generatorOptions, checkbox } = require('./widgets');
 
 class EditorPanel {
   constructor(view, vault, entry, opts = {}) {
@@ -20,11 +21,17 @@ class EditorPanel {
     this.draft = entry ? cloneEntry(entry) : newEntry(opts.type || 'login', view.state.category || '');
     if (opts.prefill) Object.assign(this.draft, cloneEntry(opts.prefill), { id: this.draft.id, category: this.draft.category });
     this.gen = Object.assign({}, view.settings.generator);
-    if (this.isNew && (this.draft.type === 'login' || this.draft.type === 'secret')) this.draft.password = generatePassword(this.gen);
+    this.pinGen = Object.assign({ length: 4, avoidWeak: true }, view.settings.pinGenerator);
+    if (this.isNew && SECRET_TYPES.includes(this.draft.type)) this.draft.password = this.freshSecret(this.draft.type);
     this.showPassword = this.isNew;
     this.tagsText = this.draft.tags.join(', ');
     this.el = el('aside.kr-editor');
     this.build();
+  }
+
+  /** Новый секрет для типа: PIN — цифры, остальное — пароль по настройкам генератора. */
+  freshSecret(type) {
+    return type === 'pin' ? generatePin(this.pinGen.length, this.pinGen) : generatePassword(this.gen);
   }
 
   focus() {
@@ -82,8 +89,12 @@ class EditorPanel {
       on: {
         click: () => {
           if (d.type === id) return;
+          const wasPin = d.type === 'pin';
           d.type = id;
-          if ((id === 'login' || id === 'secret') && !d.password) d.password = generatePassword(this.gen);
+          if (SECRET_TYPES.includes(id)) {
+            // у новой записи сгенерированный пароль меняем на PIN и обратно
+            if (!d.password || (this.isNew && (id === 'pin' ? !/^\d+$/.test(d.password) : wasPin))) d.password = this.freshSecret(id);
+          }
           this.build();
         },
       },
@@ -93,20 +104,27 @@ class EditorPanel {
 
     const titleWrap = this.input('title', 'id-card', 'Например, GitHub', { attr: { 'data-focus': true }, copyLabel: 'название' });
     body.append(this.field('Название сервиса / записи', el('span.is-req', '*обязательно'), titleWrap));
-    const hasSecret = d.type === 'login' || d.type === 'secret';
-    if (hasSecret) {
+    const hasSecret = SECRET_TYPES.includes(d.type);
+    const isPin = d.type === 'pin';
+    if (hasSecret && !isPin) {
       body.append(this.field('Ссылка / URL', null, this.input('url', 'link', 'https://example.com', { copyLabel: 'ссылка' })));
     }
     if (d.type === 'file') body.append(this.fileControl(titleWrap));
     body.append(this.field('Категория / папка в хранилище', null, this.categoryControl()));
     if (hasSecret) {
-      body.append(this.field(
-        d.type === 'secret' ? 'Идентификатор / ключ ID' : 'Имя пользователя или email',
-        null,
-        this.input('username', 'at-sign', d.type === 'secret' ? 'sk_live_… или client id' : 'name@example.com', { copyLabel: 'логин' })
-      ));
-      body.append(this.generatorBox(type));
-      body.append(this.totpField());
+      if (isPin) {
+        body.append(this.field('Карта, телефон или устройство', 'необязательно',
+          this.input('username', 'credit-card', 'Visa •• 4411, SIM МТС, домофон', { copyLabel: 'карта / устройство' })));
+        body.append(this.pinBox(type));
+      } else {
+        body.append(this.field(
+          d.type === 'secret' ? 'Идентификатор / ключ ID' : 'Имя пользователя или email',
+          null,
+          this.input('username', 'at-sign', d.type === 'secret' ? 'sk_live_… или client id' : 'name@example.com', { copyLabel: 'логин' })
+        ));
+        body.append(this.generatorBox(type));
+        body.append(this.totpField());
+      }
     }
 
     const tags = el('input.kr-input', { attr: { type: 'text', placeholder: 'работа, devops', spellcheck: 'false' } });
@@ -198,6 +216,81 @@ class EditorPanel {
       this.build();
     }, 'kr-btn-soft');
     return el('div.kr-form-row', [el('label.kr-input-wrap.kr-grow', [icon('folder'), select]), add]);
+  }
+
+  /** PIN: только цифры, генератор с выбором длины и защитой от простых комбинаций. */
+  pinBox(type) {
+    const d = this.draft;
+    const g = this.pinGen;
+    const input = el('input.kr-gen-input.kr-pin-input', {
+      attr: {
+        type: this.showPassword ? 'text' : 'password', inputmode: 'numeric', pattern: '[0-9]*', maxlength: 12,
+        spellcheck: 'false', autocomplete: 'off', placeholder: 'Цифры PIN-кода',
+      },
+    });
+    input.value = d.password;
+    const meterHost = el('div');
+    const hint = el('div.kr-pin-hint');
+    const lenChip = el('span.kr-chip.kr-chip-mint');
+    const refresh = () => {
+      const s = analyzePin(d.password);
+      lenChip.textContent = d.password ? `${d.password.length} цифр · 1 из ${(10 ** d.password.length).toLocaleString('ru-RU')}` : 'нет PIN';
+      clear(meterHost).append(strengthMeter(s));
+      hint.className = `kr-pin-hint${s.weak ? ' is-bad' : ''}`;
+      hint.textContent = s.weak ? `Легко угадать: ${s.weak}. Сгенерируйте случайный PIN.` : '';
+    };
+    input.addEventListener('input', () => {
+      const digits = input.value.replace(/\D/g, '').slice(0, 12);
+      if (digits !== input.value) input.value = digits;
+      d.password = digits;
+      refresh();
+    });
+    const regenerate = () => {
+      d.password = generatePin(g.length, g);
+      input.value = d.password;
+      refresh();
+    };
+    const saveGen = () => {
+      this.view.settings.pinGenerator = { length: g.length, avoidWeak: g.avoidWeak };
+      this.view.core.saveSettings();
+    };
+    const lengths = el('div.kr-seg.kr-pin-lengths', [4, 5, 6, 8].map((n) => el(`button.kr-seg-btn${g.length === n ? '.is-active' : ''}`, {
+      attr: { type: 'button' },
+      on: {
+        click: () => {
+          g.length = n;
+          lengths.querySelectorAll('.kr-seg-btn').forEach((b) => b.classList.toggle('is-active', b.textContent === String(n)));
+          saveGen();
+          regenerate();
+        },
+      },
+    }, String(n))));
+    refresh();
+    return el('div.kr-genbox', [
+      el('div.kr-genbox-head', [icon(type.icon), el('span', 'PIN-код и генератор'), el('div.kr-spacer'), lenChip]),
+      el('div.kr-gen-output', [
+        input,
+        iconButton(this.showPassword ? 'eye-off' : 'eye', 'Показать/скрыть', () => {
+          this.showPassword = !this.showPassword;
+          input.type = this.showPassword ? 'text' : 'password';
+        }),
+        iconButton('refresh-cw', 'Сгенерировать заново', regenerate),
+        iconButton('copy', 'Скопировать', () => this.view.copy(d.password, 'PIN')),
+      ]),
+      meterHost,
+      hint,
+      el('div.kr-genopts', [
+        el('div.kr-pin-row', [el('span', 'Цифр:'), lengths]),
+        checkbox('Без простых комбинаций (1234, 0000, годы, даты)', g.avoidWeak, (v) => {
+          g.avoidWeak = v;
+          saveGen();
+          regenerate();
+        }),
+      ]),
+      !this.isNew && this.original && this.original.password && this.original.password !== d.password
+        ? el('div.kr-hint', [icon('history'), 'Старый PIN сохранится в истории версий'])
+        : null,
+    ]);
   }
 
   generatorBox(type) {
@@ -338,6 +431,10 @@ class EditorPanel {
     entry.url = entry.url.trim();
     entry.username = entry.username.trim();
     entry.totp = entry.totp.trim();
+    if (entry.type === 'pin') {
+      entry.url = '';
+      entry.totp = '';
+    }
     entry.updated = now;
     if (this.isNew) {
       entry.created = now;

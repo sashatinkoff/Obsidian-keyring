@@ -114,14 +114,25 @@ class ExportModal extends BaseModal {
     const go = async () => {
       error.textContent = '';
       if (!list.length) return void (error.textContent = 'Нет записей для экспорта.');
+      if (!pw.value) {
+        error.textContent = 'Введите мастер-пароль.';
+        pw.focus();
+        return;
+      }
       btn.disabled = true;
+      const label = btn.querySelector('span:last-child');
+      const idle = label ? label.textContent : '';
+      if (label) label.textContent = 'Проверка пароля…';
       try {
         await this.view.manager.lockout.guard(this.vault, () => this.vault.verifyPassword(pw.value));
       } catch (e) {
         btn.disabled = false;
+        if (label) label.textContent = idle;
         error.textContent = passwordErrorText(e);
         return;
       }
+      if (label) label.textContent = 'Экспорт…';
+      pw.blur();
       try {
         const base = `${safeName(this.vault.name)} ${stamp()}`;
         let where;
@@ -144,6 +155,7 @@ class ExportModal extends BaseModal {
         this.view.core.notice(`Экспортировано ${countLabel(list.length, REC)}: ${where}. Файлы не зашифрованы — удалите их после использования.`, 10000);
       } catch (e) {
         btn.disabled = false;
+        if (label) label.textContent = idle;
         error.textContent = `Не удалось экспортировать: ${e.message}`;
       }
     };

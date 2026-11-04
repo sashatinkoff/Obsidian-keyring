@@ -29,6 +29,16 @@ class BaseModal extends Modal {
     super(app);
     this.modalEl.classList.add('kr-modal');
     this.titleText = title;
+    // Нажатие на кнопку, пока в поле ввода фокус: не даём полю потерять фокус раньше клика.
+    // Иначе на телефоне сначала прячется клавиатура, окно сдвигается — и первое нажатие «теряется».
+    this.modalEl.addEventListener('pointerdown', (e) => {
+      const btn = e.target.closest('button');
+      const active = document.activeElement;
+      if (btn && !btn.disabled && active && /^(INPUT|TEXTAREA)$/.test(active.tagName) && this.modalEl.contains(active)
+        && !btn.classList.contains('kr-seg-btn')) {
+        e.preventDefault();
+      }
+    });
   }
 
   onOpen() {

@@ -43,6 +43,8 @@ class KeyringView extends ItemView {
       vaultFolder: s.lastVault,
       category: null,
       query: '',
+      tags: new Set(), // выбранные теги-фильтры (запись должна иметь все)
+      tagsAll: false, // показать все теги, а не только частые
       group: s.group || 'alpha',
       layout: s.layout || 'cards',
       expanded: new Set(),
@@ -250,7 +252,10 @@ class KeyringView extends ItemView {
   }
 
   onManagerEvent(type) {
-    if (type === 'lock' || type === 'unlock') this.state.category = null; // всегда начинаем со «Все записи»
+    if (type === 'lock' || type === 'unlock') {
+      this.state.category = null; // всегда начинаем со «Все записи»
+      this.state.tags.clear();
+    }
     if (type === 'lock') {
       this.editor = null;
       this.state.revealed.clear();
@@ -335,6 +340,7 @@ class KeyringView extends ItemView {
       this.state.vaultFolder = folder;
       this.state.category = null;
       this.state.query = '';
+      this.state.tags.clear();
       this.state.expanded.clear();
       this.state.revealed.clear();
       this.editor = null;
@@ -347,6 +353,18 @@ class KeyringView extends ItemView {
 
   setCategory(path) {
     this.state.category = path;
+    this.state.tab = 'vault';
+    this.render();
+  }
+
+  /** Тег-фильтр: включить/выключить (null — сбросить все). */
+  toggleTag(tag) {
+    if (tag === null) this.state.tags.clear();
+    else {
+      const t = String(tag).toLowerCase();
+      if (this.state.tags.has(t)) this.state.tags.delete(t);
+      else this.state.tags.add(t);
+    }
     this.state.tab = 'vault';
     this.render();
   }
@@ -506,6 +524,7 @@ class KeyringView extends ItemView {
     this.state.tab = 'vault';
     this.state.category = null;
     this.state.query = '';
+    this.state.tags.clear();
     this.state.expanded.add(id);
     this.state.focusId = id;
     this.editor = null;
