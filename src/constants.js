@@ -5,7 +5,7 @@ const HEADER_FILE = 'keyring.vault.json';
 const ENTRY_EXT = 'kr';
 const FORMAT = 'obsidian-keyring';
 const FORMAT_VERSION = 1;
-const APP_VERSION = '1.3.0';
+const APP_VERSION = '1.8.0';
 
 // Границы числа итераций PBKDF2 в заголовке: защита от подменённого
 // заголовка с абсурдными значениями (слишком слабо или «повесить» устройство).
@@ -38,6 +38,8 @@ const DEFAULT_SETTINGS = {
   group: 'alpha',
   layout: 'cards',
   uiLayout: 'auto', // auto | full | compact — вид интерфейса
+  theme: 'auto', // auto (как в Obsidian) | light | dark
+  design: 'keyring', // keyring (фирменный) | m3 (Material 3)
   mobileTopInset: 'auto',
   mobileBottomInset: 'auto',
   lockoutAttempts: 3,

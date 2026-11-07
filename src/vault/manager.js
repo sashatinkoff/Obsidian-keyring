@@ -5,6 +5,7 @@
  * своим мастер-паролем.
  */
 const { HEADER_FILE } = require('../constants');
+const remember = require('./remember');
 const { Vault } = require('./vault');
 const { Emitter } = require('../util/emitter');
 const { Lockout } = require('./lockout');
@@ -14,6 +15,7 @@ const { dirname } = require('../util/format');
 class VaultManager extends Emitter {
   constructor(core) {
     super();
+    this.manualLocked = new Set();
     this.core = core;
     this.app = core.app;
     this.vaults = new Map();
@@ -99,6 +101,7 @@ class VaultManager extends Emitter {
 
   /** Убрать хранилище из Keyring: файлы остаются, папка больше не подхватывается автоматически. */
   async forget(vault) {
+    remember.forget(this.app, vault.folder);
     if (vault.unlocked) vault.lock();
     this.vaults.delete(vault.folder);
     this.settings.vaults = this.settings.vaults.filter((f) => f !== vault.folder);
@@ -141,6 +144,7 @@ class VaultManager extends Emitter {
       if (await adapter.exists(p)) await adapter.remove(p);
     }
     delete this.settings.headerBackups[vault.folder];
+    remember.forget(this.app, vault.folder);
     try {
       const { files, folders } = await adapter.list(vault.folder);
       if (!files.length && !folders.length) await adapter.rmdir(vault.folder, false);
@@ -153,11 +157,106 @@ class VaultManager extends Emitter {
     this.emit('change');
   }
 
-  async unlock(vault, password) {
+  async unlock(vault, password, opts = {}) {
     await this.lockout.guard(vault, () => vault.unlock(password));
     await this.ensureRecovery(vault, password);
+    if (opts.remember) await this.setRemembered(vault, true);
+    this.manualLocked.delete(vault.folder);
     this.touch();
     this.emit('unlock', vault);
+  }
+
+  /* ---------- «не спрашивать пароль на этом устройстве» ---------- */
+
+  isRemembered(vault) {
+    return remember.isRemembered(this.app, vault.folder);
+  }
+
+  /** Как входить на этом устройстве: 'password' | 'pin' | 'none'. */
+  deviceMode(vault) {
+    return remember.mode(this.app, vault.folder) || 'password';
+  }
+
+  pinInfo(vault) {
+    return remember.pinInfo(this.app, vault.folder);
+  }
+
+  async setRemembered(vault, on) {
+    if (on) await remember.remember(this.app, vault);
+    else remember.forget(this.app, vault.folder);
+    this.emit('change');
+  }
+
+  /** Вход по PIN-коду на этом устройстве (хранилище должно быть открыто). */
+  async setPin(vault, pin) {
+    if (!/^\d{4,12}$/.test(String(pin))) throw new Error('PIN-код — от 4 до 12 цифр');
+    await remember.remember(this.app, vault, { pin: String(pin) });
+    this.emit('change');
+  }
+
+  /** Открыть по PIN-коду. Неверный PIN — PinError (с числом оставшихся попыток). */
+  async unlockWithPin(vault, pin) {
+    if (vault.unlocked) return true;
+    await vault.refreshHeader().catch(() => {});
+    let key;
+    try {
+      key = await remember.recall(this.app, vault, pin);
+    } catch (e) {
+      if (e.name === 'PinError' && e.left === 0) this.emit('change');
+      throw e;
+    }
+    if (!key) {
+      remember.forget(this.app, vault.folder);
+      this.emit('change');
+      throw new Error('PIN-код больше не действует на этом устройстве — войдите мастер-паролем');
+    }
+    return this.finishDeviceUnlock(vault, key);
+  }
+
+  async finishDeviceUnlock(vault, key) {
+    vault.key = key;
+    await vault.reload();
+    if (!vault.entries.size && vault.errors.length) {
+      vault.lock();
+      remember.forget(this.app, vault.folder);
+      this.emit('change');
+      throw new Error('Сохранённый ключ не подходит к хранилищу — войдите мастер-паролем');
+    }
+    this.manualLocked.delete(vault.folder);
+    this.touch();
+    this.emit('unlock', vault);
+    return true;
+  }
+
+  /** Открыть без пароля, если хранилище запомнено на этом устройстве. */
+  async unlockRemembered(vault) {
+    if (vault.unlocked) return true;
+    if (this.deviceMode(vault) !== 'none') return false;
+    await vault.refreshHeader().catch(() => {});
+    const key = await remember.recall(this.app, vault);
+    if (!key) {
+      // ключ устройства утерян или хранилище пересоздано — запоминание больше не действует
+      remember.forget(this.app, vault.folder);
+      this.emit('change');
+      return false;
+    }
+    vault.key = key;
+    await vault.reload();
+    if (!vault.entries.size && vault.errors.length) {
+      vault.lock();
+      remember.forget(this.app, vault.folder);
+      this.emit('change');
+      return false;
+    }
+    this.manualLocked.delete(vault.folder);
+    this.touch();
+    this.emit('unlock', vault);
+    return true;
+  }
+
+  /** Можно ли открыть автоматически (запомнено и не заблокировано вручную в этой сессии). */
+  canAutoUnlock(vault) {
+    return !vault.unlocked && !this.manualLocked.has(vault.folder) && this.deviceMode(vault) === 'none';
   }
 
   /** Применить текущий ключ восстановления ко всем открытым хранилищам (пароль не нужен). */
@@ -221,6 +320,7 @@ class VaultManager extends Emitter {
 
   lock(vault) {
     if (!vault.unlocked) return;
+    this.manualLocked.add(vault.folder); // вручную — не открывать само до нажатия
     vault.lock();
     vault.countEntries().then(() => this.emit('change'));
     if (!this.anyUnlocked) this.core.clipboard.clear();
@@ -228,6 +328,8 @@ class VaultManager extends Emitter {
   }
 
   lockAll(reason) {
+    // ручная блокировка отключает автооткрытие запомненных хранилищ до нажатия «Открыть»
+    if (reason === 'manual' || reason === 'unload') for (const v of this.vaults.values()) this.manualLocked.add(v.folder);
     let any = false;
     for (const v of this.vaults.values()) {
       if (v.unlocked) {

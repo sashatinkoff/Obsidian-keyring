@@ -1,6 +1,7 @@
 'use strict';
 /* Глобальные настройки (используются и во вкладке Obsidian, и внутри Keyring). */
 const { PluginSettingTab, Setting } = require('obsidian');
+const { applyEverywhere } = require('../util/theme');
 const { formatNumber } = require('../util/format');
 const { el } = require('../util/dom');
 
@@ -118,6 +119,30 @@ function buildGlobalSettings(container, core, refresh) {
   );
 
   new Setting(container).setName('Интерфейс').setHeading();
+  dropdown(
+    new Setting(container)
+      .setName('Тема')
+      .setDesc('«Авто» — как в Obsidian: переключается вместе с ним (и с системой, если в Obsidian выбрано «Как в системе»). Или задайте тему принудительно.'),
+    [['auto', 'Авто'], ['light', 'Светлая'], ['dark', 'Тёмная']],
+    s.theme || 'auto',
+    async (v) => {
+      s.theme = v;
+      await save();
+      applyEverywhere();
+    }
+  );
+  dropdown(
+    new Setting(container)
+      .setName('Оформление')
+      .setDesc('«Keyring» — фирменный стиль. «Material 3» — стандартный дизайн Google: тональные поверхности, скруглённые кнопки, без свечений. Работает со светлой и тёмной темой.'),
+    [['keyring', 'Keyring'], ['m3', 'Material 3']],
+    s.design || 'keyring',
+    async (v) => {
+      s.design = v;
+      await save();
+      applyEverywhere();
+    }
+  );
   dropdown(
     new Setting(container)
       .setName('Вид интерфейса')

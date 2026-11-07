@@ -1,6 +1,7 @@
 'use strict';
 /* Модальные окна: подтверждение, ввод, создание хранилища, смена пароля, история, импорт. */
 const { Modal, normalizePath } = require('obsidian');
+const { applyTheme } = require('../util/theme');
 const { el, icon, iconButton, button, clear } = require('../util/dom');
 const { analyzePassword } = require('../crypto/strength');
 const {
@@ -28,6 +29,7 @@ class BaseModal extends Modal {
   constructor(app, title) {
     super(app);
     this.modalEl.classList.add('kr-modal');
+    applyTheme(this.modalEl);
     this.titleText = title;
     // Нажатие на кнопку, пока в поле ввода фокус: не даём полю потерять фокус раньше клика.
     // Иначе на телефоне сначала прячется клавиатура, окно сдвигается — и первое нажатие «теряется».

@@ -135,6 +135,7 @@ const COLUMN_ALIASES = {
   type: ['type', 'тип'],
   fields: ['fields', 'custom fields', 'поля'],
   favorite: ['favorite', 'favourite', 'fav', 'избранное'],
+  archived: ['archived', 'архив'],
   created: ['created', 'создано', 'creation time'],
   updated: ['updated', 'modified', 'изменено', 'last modified', 'last modification time'],
 };
@@ -195,7 +196,8 @@ function fromCsv(text) {
       url,
       totp: get(r, 'totp'),
       notes: get(r, 'notes'),
-      tags: get(r, 'tags').split(/[,;]/).map((t) => t.trim().replace(/^#/, '')).filter(Boolean),
+      tags: get(r, 'tags').split(/[,;]/).map((t) => t.trim().replace(/^#/, '')).filter(Boolean)
+        .concat(/^(1|true|yes|да)$/i.test(get(r, 'archived').trim()) ? ['архив'] : []),
       category: get(r, 'folder').replace(/\\/g, '/').replace(/^\/+|\/+$/g, '').replace(/^(Root|Корень)(\/|$)/i, ''),
       fields,
       favorite: /^(1|true|yes|да|\*)$/i.test(get(r, 'favorite').trim()),

@@ -1,5 +1,6 @@
 'use strict';
 /* Окна экспорта (JSON / CSV / Markdown) и импорта (JSON / CSV / Markdown). */
+const { ENTRY_TYPES } = require('../constants');
 const { Platform } = require('obsidian');
 const { el, icon, button } = require('../util/dom');
 const { countLabel } = require('../util/format');
@@ -7,6 +8,7 @@ const {
   toJson, toCsv, toSingleMarkdown, parseImport, planImport, exportMarkdown, readMarkdownFolder, stamp, safeName,
 } = require('../vault/exchange');
 const { toBase64 } = require('../crypto/codec');
+const { from1pux } = require('../vault/onepassword');
 const { attachFolderSuggest } = require('../util/suggest');
 const { freePath } = require('../vault/converter');
 const { download, saveToVault } = require('../util/download');
@@ -169,17 +171,23 @@ class ExportModal extends BaseModal {
 
 /* ---------------- импорт ---------------- */
 
+/** .1pux / .zip читаем как двоичный файл, остальное — как текст. */
+async function readPicked(f) {
+  if (/\.(1pux|zip)$/i.test(f.name)) return { name: f.name, buffer: await f.arrayBuffer() };
+  return { name: f.name, text: await f.text() };
+}
+
 function pickFiles() {
   return new Promise((resolve) => {
     const input = document.createElement('input');
     input.type = 'file';
     input.multiple = true;
-    input.accept = '.json,.csv,.md,.markdown,.txt,application/json,text/csv,text/markdown';
+    input.accept = '.json,.csv,.md,.markdown,.txt,.1pux,.zip,application/json,text/csv,text/markdown,application/zip';
     input.style.display = 'none';
     input.addEventListener('change', async () => {
       const list = Array.from(input.files || []);
       input.remove();
-      resolve(list.length ? await Promise.all(list.map(async (f) => ({ name: f.name, text: await f.text() }))) : null);
+      resolve(list.length ? await Promise.all(list.map(readPicked)) : null);
     });
     document.body.appendChild(input);
     input.click();
@@ -208,16 +216,18 @@ class ImportModal extends BaseModal {
     const entries = [];
     const formats = new Set();
     const bad = [];
+    let skippedTrash = 0;
     for (const f of list) {
       try {
-        const r = parseImport(f.text, f.name);
+        const r = f.buffer ? await from1pux(f.buffer) : parseImport(f.text, f.name);
+        skippedTrash += r.skipped || 0;
         formats.add(r.format);
         entries.push(...r.entries);
       } catch (e) {
         bad.push(`${f.name}: ${e.message}`);
       }
     }
-    if (entries.length) this.parsed = { format: Array.from(formats).join(', '), entries, bad };
+    if (entries.length) this.parsed = { format: Array.from(formats).join(', '), entries, bad, skippedTrash };
     else this.error = bad[0] || 'В файле нет записей';
     this.onOpen();
   }
@@ -242,7 +252,7 @@ class ImportModal extends BaseModal {
       icon(this.parsed ? 'file-check' : 'upload'),
       el('div.kr-grow', this.file
         ? [el('b', this.file.name), el('small', this.error || `${this.parsed.format} · ${countLabel(this.parsed.entries.length, REC)}`)]
-        : [el('b', 'Выбрать файлы JSON, CSV или .md'), el('small', 'экспорт Keyring, Bitwarden, Chrome, 1Password, KeePass, LastPass, заметки — можно несколько или перетащить сюда')]),
+        : [el('b', 'Выбрать файлы 1PUX, JSON, CSV или .md'), el('small', 'экспорт 1Password (.1pux, CSV), Keyring, Bitwarden, Chrome, KeePass, LastPass, заметки — можно несколько или перетащить сюда')]),
       this.file ? button('Другой файл', null, () => choose(), 'kr-btn-ghost kr-btn-sm') : null,
     ]);
     const choose = async () => {
@@ -256,7 +266,7 @@ class ImportModal extends BaseModal {
     drop.addEventListener('drop', async (e) => {
       e.preventDefault();
       const fl = Array.from((e.dataTransfer && e.dataTransfer.files) || []);
-      if (fl.length) await this.load(await Promise.all(fl.map(async (f) => ({ name: f.name, text: await f.text() }))));
+      if (fl.length) await this.load(await Promise.all(fl.map(readPicked)));
     });
     c.append(drop);
 
@@ -270,6 +280,12 @@ class ImportModal extends BaseModal {
     c.append(el('div.kr-import-folder', [folderPick, button('Из папки', 'folder-open', goFolder, 'kr-btn-soft')]));
     if (this.parsed && this.parsed.bad && this.parsed.bad.length) {
       c.append(el('p.kr-hint', [icon('alert-triangle'), `Пропущены файлы: ${this.parsed.bad.join('; ')}`]));
+    }
+    if (this.parsed && this.parsed.skippedTrash) {
+      c.append(el('p.kr-hint', [icon('info'), `Из корзины 1Password не импортируется: ${this.parsed.skippedTrash}.`]));
+    }
+    if (this.parsed && /1Password/.test(this.parsed.format)) {
+      c.append(el('p.kr-hint', [icon('shield-alert'), 'Файл .1pux не зашифрован: после импорта удалите его — и из «Загрузок», и из корзины.']));
     }
 
     if (!this.parsed || this.error) {
@@ -302,7 +318,7 @@ class ImportModal extends BaseModal {
     const preview = [...plan.add, ...plan.update].slice(0, 6);
     if (preview.length) {
       c.append(el('div.kr-issues.kr-import-preview', preview.map((e) => el('div.kr-issue', [
-        icon(e.type === 'note' ? 'sticky-note' : 'key-round'),
+        icon((ENTRY_TYPES[e.type] || ENTRY_TYPES.login).icon),
         el('div.kr-issue-main', [el('b', e.title), el('small', [e.username, e.url, e.category].filter(Boolean).join(' · ') || '—')]),
       ]))));
       const more = plan.add.length + plan.update.length - preview.length;

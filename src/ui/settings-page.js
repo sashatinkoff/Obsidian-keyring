@@ -1,6 +1,8 @@
 'use strict';
 /* Вкладка «Настройки» внутри Keyring: текущее хранилище, список хранилищ, глобальные опции. */
 const { el, icon, button } = require('../util/dom');
+const { SetPinModal } = require('./pin-modal');
+const { checkbox } = require('./widgets');
 const { formatDate, formatNumber, countLabel } = require('../util/format');
 const { CIPHER_LABEL, KDF_LABEL } = require('../constants');
 const { buildGlobalSettings } = require('./settings-tab');
@@ -51,7 +53,59 @@ function vaultCard(view, vault) {
       vault.header.changed ? infoRow('Пароль менялся', formatDate(vault.header.changed)) : null,
     ]),
     el('div.kr-actions-row', actions),
+    rememberRow(view, vault),
     unlocked ? el('p.kr-hint', [icon('info'), 'Смена пароля перешифровывает только ключ в keyring.vault.json — записи не трогаются, и на других устройствах достаточно ввести новый пароль после синхронизации.']) : null,
+  ]);
+}
+
+/** Как входить в хранилище на этом устройстве: мастер-пароль, PIN-код или без пароля. */
+function rememberRow(view, vault) {
+  const mode = view.manager.deviceMode(vault);
+  if (!vault.unlocked && mode === 'password') return null;
+  const set = async (next) => {
+    if (next === mode && next !== 'pin') return;
+    if (!vault.unlocked) {
+      view.core.notice('Откройте хранилище, чтобы изменить способ входа');
+      return;
+    }
+    if (next === 'pin') {
+      new SetPinModal(view, vault).open();
+      return;
+    }
+    if (next === 'none') {
+      const ok = await new ConfirmModal(view.app, {
+        title: 'Открывать без пароля на этом устройстве?',
+        message: `«${vault.name}» будет открываться без мастер-пароля в этом приложении Obsidian на этом устройстве. `
+          + 'Защитой станет блокировка самого телефона или компьютера. На другие устройства настройка не переходит — '
+          + 'Syncthing её не синхронизирует.',
+        cta: 'Не спрашивать',
+      }).ask();
+      if (!ok) return;
+      await view.manager.setRemembered(vault, true);
+      view.core.notice(`«${vault.name}»: пароль на этом устройстве больше не нужен`);
+    } else {
+      await view.manager.setRemembered(vault, false);
+      view.core.notice(`«${vault.name}»: вход мастер-паролем`);
+    }
+    view.render();
+  };
+  const opt = (id, label, ic) => el(`button.kr-seg-btn${mode === id ? '.is-active' : ''}`, {
+    attr: { type: 'button', disabled: !vault.unlocked && id !== 'password' },
+    on: { click: () => set(id) },
+  }, [icon(ic), el('span', label)]);
+  const hint = {
+    password: 'Каждый раз нужен мастер-пароль.',
+    pin: 'Короткий PIN-код вместо мастер-пароля на этом устройстве. 5 неверных попыток — и снова нужен мастер-пароль. Нажмите «PIN-код» ещё раз, чтобы сменить PIN.',
+    none: 'Открывается само при запуске и после автоблокировки; после ручной блокировки — одним нажатием. Защита — блокировка устройства.',
+  }[mode];
+  return el('div.kr-remember-row', [
+    el('div.kr-form-label', [el('span', 'Вход на этом устройстве')]),
+    el('div.kr-seg.kr-seg-full.kr-login-mode', [
+      opt('password', 'Мастер-пароль', 'key-round'),
+      opt('pin', 'PIN-код', 'rectangle-ellipsis'),
+      opt('none', 'Без пароля', 'smartphone'),
+    ]),
+    el('small.kr-muted', hint),
   ]);
 }
 

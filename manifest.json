@@ -1,7 +1,7 @@
 {
   "id": "keyring",
   "name": "Keyring",
-  "version": "1.3.0",
+  "version": "1.8.0",
   "minAppVersion": "1.4.0",
   "description": "Зашифрованные хранилища паролей и секретов прямо в папках хранилища Obsidian: карточки, генератор, TOTP, аудит. AES-256-GCM + PBKDF2, работает на десктопе и мобильных, дружит с Syncthing.",
   "author": "Keyring",

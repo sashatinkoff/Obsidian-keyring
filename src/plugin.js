@@ -1,6 +1,7 @@
 'use strict';
 /* Ядро плагина: настройки, команды, вид, события файлов, статус-бар. */
 const { Notice, Platform } = require('obsidian');
+const themeStore = require('./util/theme');
 const { VIEW_TYPE, DEFAULT_SETTINGS, DEFAULT_GENERATOR } = require('./constants');
 const { VaultManager } = require('./vault/manager');
 const headerStore = require('./vault/header-store');
@@ -26,6 +27,9 @@ class KeyringCore {
     if (!Array.isArray(this.settings.vaults)) this.settings.vaults = [];
 
     headerStore.attach(this);
+    themeStore.attach(this);
+    // «авто»: тема Obsidian сменилась (вручную или вслед за системой) — перекрашиваемся
+    plugin.registerEvent(this.app.workspace.on('css-change', () => themeStore.applyEverywhere()));
     this.clipboard = new SecureClipboard(this);
     this.manager = new VaultManager(this);
 

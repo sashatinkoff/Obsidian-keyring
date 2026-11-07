@@ -102,6 +102,11 @@ function renderMobileHeader(view, vault) {
       title: 'Хранилища',
       on: { click: (e) => view.vaultMenu(e) },
     }, [icon('shield')]),
+    el('button.kr-round-btn.kr-menu-btn', {
+      attr: { type: 'button', 'aria-label': 'Меню' },
+      title: 'Разделы: генератор, анализ, настройки',
+      on: { click: (e) => view.sectionsMenu(e) },
+    }, [icon('menu')]),
   ]);
 }
 

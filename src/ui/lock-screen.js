@@ -3,10 +3,79 @@
 const { Platform } = require('obsidian');
 const { CIPHER_LABEL, KDF_LABEL, APP_VERSION } = require('../constants');
 const { el, icon, button } = require('../util/dom');
+const { checkbox } = require('./widgets');
 const { countLabel, formatNumber, formatCountdown } = require('../util/format');
 const { passwordErrorText } = require('./modals');
 const { RecoverModal, pickKeyFile } = require('./recovery');
 const { RemoveVaultModal } = require('./remove-vault');
+
+/** Вход по PIN-коду: точки-индикатор, цифровое поле, автоотправка при наборе всех цифр. */
+function renderPinUnlock(view, vault) {
+  const info = view.manager.pinInfo(vault) || { length: 0, left: 5 };
+  const box = el('div.kr-pin-unlock');
+  const dots = el('div.kr-pin-dots', Array.from({ length: Math.max(info.length, 4) }, () => el('span')));
+  const err = el('div.kr-pin-error');
+  const input = el('input.kr-input.kr-pin-field', {
+    attr: {
+      type: 'password', inputmode: 'numeric', pattern: '[0-9]*', maxlength: 12, autocomplete: 'off',
+      placeholder: 'PIN-код', 'aria-label': 'PIN-код', spellcheck: 'false',
+    },
+  });
+  let busy = false;
+  const paint = () => {
+    dots.querySelectorAll('span').forEach((d, i) => d.classList.toggle('is-on', i < input.value.length));
+  };
+  const go = async () => {
+    if (busy || input.value.length < 4) return;
+    busy = true;
+    box.classList.add('is-busy');
+    err.textContent = '';
+    try {
+      await view.manager.unlockWithPin(vault, input.value);
+    } catch (e) {
+      busy = false;
+      box.classList.remove('is-busy');
+      input.value = '';
+      paint();
+      if (e.name === 'PinError' && e.left === 0) {
+        view.pinFallback.add(vault.folder);
+        view.core.notice(e.message, 8000);
+        view.render();
+        return;
+      }
+      err.textContent = e.message;
+      box.classList.remove('is-shake');
+      void box.offsetWidth;
+      box.classList.add('is-shake');
+      input.focus();
+    }
+  };
+  input.addEventListener('input', () => {
+    const digits = input.value.replace(/\D/g, '').slice(0, 12);
+    if (digits !== input.value) input.value = digits;
+    paint();
+    if (info.length && digits.length === info.length) go();
+  });
+  input.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') go();
+  });
+  box.append(
+    el('div.kr-pin-title', [icon('rectangle-ellipsis'), el('span', 'Введите PIN-код')]),
+    dots,
+    el('div.kr-lock-form', [input, button('Открыть', 'lock-open', go, 'kr-btn-primary kr-btn-lg')]),
+    err,
+    el('div.kr-pin-links', [
+      el('button.kr-link', {
+        attr: { type: 'button' },
+        on: { click: () => { view.pinFallback.add(vault.folder); view.render(); } },
+      }, [icon('key-round'), 'Войти мастер-паролем']),
+    ]),
+  );
+  window.setTimeout(() => {
+    if (!Platform.isMobile && input.isConnected) input.focus();
+  }, 60);
+  return box;
+}
 
 function renderLockScreen(view, vault) {
   const wrap = el('div.kr-lock');
@@ -17,6 +86,45 @@ function renderLockScreen(view, vault) {
     },
   });
   const submit = button('Разблокировать', 'lock-open', () => go(), 'kr-btn-primary kr-btn-lg');
+  const deviceMode = view.manager.deviceMode(vault);
+  const remembered = deviceMode === 'none';
+  const pinMode = deviceMode === 'pin' && !view.pinFallback.has(vault.folder);
+  let rememberOn = false;
+  const rememberBox = deviceMode !== 'password' ? null : checkbox('Не спрашивать пароль на этом устройстве', false, (v) => {
+    rememberOn = v;
+  });
+  const pinBlock = pinMode ? renderPinUnlock(view, vault) : null;
+
+  // запомнено на этом устройстве: открывается сам (если не заблокирован вручную) или одним нажатием
+  if (remembered && view.manager.canAutoUnlock(vault) && !view.autoUnlockTried.has(vault.folder)) {
+    view.autoUnlockTried.add(vault.folder);
+    view.manager.unlockRemembered(vault).then((ok) => {
+      if (!ok) view.render();
+    }).catch(() => view.render());
+  }
+  const quick = remembered ? el('div.kr-lock-quick', [
+    button('Открыть — пароль не нужен', 'lock-open', async () => {
+      const ok = await view.manager.unlockRemembered(vault).catch(() => false);
+      if (!ok) {
+        error.textContent = 'Не удалось открыть без пароля — введите мастер-пароль.';
+        view.render();
+      }
+    }, 'kr-btn-primary kr-btn-lg kr-lock-quick-btn'),
+    el('div.kr-lock-quick-note', [
+      icon('smartphone'),
+      el('span', 'Хранилище запомнено на этом устройстве. '),
+      el('button.kr-link', {
+        attr: { type: 'button' },
+        on: {
+          click: async () => {
+            await view.manager.setRemembered(vault, false);
+            view.core.notice(`«${vault.name}»: снова спрашивать пароль на этом устройстве`);
+            view.render();
+          },
+        },
+      }, 'Снова спрашивать пароль'),
+    ]),
+  ]) : null;
 
   // ограничение попыток: пароль заблокирован, но вход ключом восстановления доступен
   const lock = view.manager.lockout.status(vault);
@@ -45,7 +153,7 @@ function renderLockScreen(view, vault) {
     error.textContent = '';
     submit.querySelector('span:last-child').textContent = 'Расшифровка…';
     try {
-      await view.manager.unlock(vault, pw);
+      await view.manager.unlock(vault, pw, { remember: rememberOn });
     } catch (e) {
       wrap.classList.remove('is-busy');
       submit.disabled = false;
@@ -79,7 +187,15 @@ function renderLockScreen(view, vault) {
       el('span', vault.folder),
       count !== null && count !== undefined ? el('span.kr-muted', ` · ${countLabel(count, ['запись', 'записи', 'записей'])}`) : null,
     ]),
-    el('div.kr-lock-form', [input, submit]),
+    quick,
+    quick ? el('div.kr-lock-or', [el('span', 'или паролем')]) : null,
+    pinBlock,
+    pinBlock ? null : el('div.kr-lock-form', [input, submit]),
+    pinBlock ? null : (rememberBox ? el('div.kr-lock-remember', [rememberBox]) : null),
+    deviceMode === 'pin' && !pinBlock ? el('button.kr-link.kr-lock-pinback', {
+      attr: { type: 'button' },
+      on: { click: () => { view.pinFallback.delete(vault.folder); view.render(); } },
+    }, [icon('rectangle-ellipsis'), 'Войти по PIN-коду']) : null,
     error,
     el('div.kr-lock-alt', [
       el('div.kr-lock-or', [el('span', 'или')]),

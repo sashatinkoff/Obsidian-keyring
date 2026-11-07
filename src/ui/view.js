@@ -7,6 +7,8 @@
 const {
   ItemView, Menu, Keymap, MarkdownRenderer, Platform,
 } = require('obsidian');
+const { TABS } = require('../constants');
+const { applyTheme, applyEverywhere, resolveTheme } = require('../util/theme');
 const { ExportModal, ImportModal } = require('./exchange-modal');
 const { VIEW_TYPE } = require('../constants');
 const { el, icon, clear } = require('../util/dom');
@@ -38,6 +40,8 @@ class KeyringView extends ItemView {
     super(leaf);
     this.core = core;
     const s = core.settings;
+    this.autoUnlockTried = new Set(); // автооткрытие запомненных — один раз за показ экрана
+    this.pinFallback = new Set(); // хранилища, где выбрали «Войти мастер-паролем» вместо PIN
     this.state = {
       tab: 'vault',
       vaultFolder: s.lastVault,
@@ -253,6 +257,8 @@ class KeyringView extends ItemView {
 
   onManagerEvent(type) {
     if (type === 'lock' || type === 'unlock') {
+      if (type === 'lock') this.autoUnlockTried.clear();
+      if (type === 'unlock') this.pinFallback.clear();
       this.state.category = null; // всегда начинаем со «Все записи»
       this.state.tags.clear();
     }
@@ -275,6 +281,7 @@ class KeyringView extends ItemView {
     const scrollTop = scroller ? scroller.scrollTop : 0;
     clear(this.root);
     this.root.className = `kr-view kr-mode-${this.mode}${this.docked ? ' kr-docked' : ''}`;
+    applyTheme(this.root);
     this.searchInput = null;
     this.listHost = null;
 
@@ -302,8 +309,8 @@ class KeyringView extends ItemView {
     }
 
     if (this.mode === 'narrow') {
+      // нижней панели нет: разделы открываются кнопкой меню в шапке
       if (tab === 'vault' && vault && vault.unlocked && !this.editor) this.root.append(renderFab(this));
-      this.root.append(renderBottomNav(this));
     }
     main.scrollTop = this.resetScroll ? 0 : scrollTop;
     this.resetScroll = false;
@@ -535,6 +542,32 @@ class KeyringView extends ItemView {
       node.classList.add('is-flash');
       window.setTimeout(() => node.classList.remove('is-flash'), 1600);
     }
+  }
+
+  /** Меню разделов (телефон): Хранилище, Генератор, Анализ, Настройки, тема, блокировка. */
+  sectionsMenu(evt) {
+    const menu = new Menu();
+    for (const [id, t] of Object.entries(TABS)) {
+      menu.addItem((item) => item.setTitle(t.label).setIcon(t.icon)
+        .setChecked(this.state.tab === id)
+        .onClick(() => this.setTab(id)));
+    }
+    menu.addSeparator();
+    const light = resolveTheme() === 'light';
+    menu.addItem((item) => item.setTitle(light ? 'Тёмная тема' : 'Светлая тема').setIcon(light ? 'moon' : 'sun')
+      .onClick(async () => {
+        this.settings.theme = light ? 'dark' : 'light';
+        await this.core.saveSettings();
+        applyEverywhere();
+      }));
+    if (this.manager.anyUnlocked) {
+      menu.addItem((item) => item.setTitle('Заблокировать всё').setIcon('lock')
+        .onClick(() => this.manager.lockAll('manual')));
+    }
+    if (evt && evt.currentTarget && menu.showAtPosition) {
+      const r = evt.currentTarget.getBoundingClientRect();
+      menu.showAtPosition({ x: r.right, y: r.bottom + 4 });
+    } else menu.showAtMouseEvent(evt);
   }
 
   vaultMenu(evt) {
